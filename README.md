@@ -1,11 +1,23 @@
 # Mon Comptable — CAM-TAXE
 
-Application mobile (web mobile-first) de déclarations et de conseils fiscaux au
-Cameroun, construite d'après les maquettes fournies.
+Application de déclarations et de conseils fiscaux au Cameroun, construite
+d'après les maquettes fournies.
 
 > « Faites vos déclarations chez nous — 100 % sûr et rapide »
 
-## Démarrer
+## Deux implémentations
+
+Le même produit existe ici sous deux formes, avec les mêmes 7 services et le
+même contenu éditorial :
+
+| | Emplacement | Ce que c'est |
+| --- | --- | --- |
+| **Flutter** | [`flutter_app/`](flutter_app/) | Vraie application **Android et iOS**, installable. Voir son [README](flutter_app/README.md). |
+| **React** | racine du dépôt | Application **web** mobile-first, ouvrable dans un navigateur. |
+
+Le reste de ce document décrit la version React.
+
+## Démarrer (React)
 
 ```bash
 npm install
