@@ -1,0 +1,23 @@
+name: mon_comptable
+description: Mon Comptable / CAM-TAXE — déclarations et conseils fiscaux au Cameroun.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Téléversement des pièces (CNI, bulletins, factures…)
+  file_picker: ^8.1.2
+  # Persistance locale du compte, des demandes et de la messagerie
+  shared_preferences: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
