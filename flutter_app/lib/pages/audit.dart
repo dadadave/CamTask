@@ -141,7 +141,7 @@ class _PageAuditState extends State<PageAudit> {
                 Encadre(
                   marge: EdgeInsets.zero,
                   enfants: [
-                    const Text('MOYEN DE PAIEMENT', style: Textes.libelle),
+                    Text('MOYEN DE PAIEMENT', style: Textes.libelle(context)),
                     const SizedBox(height: 10),
                     Pastilles(
                       options: _operateurs,

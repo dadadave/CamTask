@@ -14,6 +14,8 @@ import 'pages/profil.dart';
 import 'pages/services.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
+import 'widgets/communs.dart';
+import 'widgets/coquille.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,46 +75,56 @@ class RequiertCompte extends StatelessWidget {
     if (etat.connecte) return child;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Créer un compte')),
+      appBar: const BarreDegrade(titre: 'Créer un compte'),
       body: Center(
         child: Container(
-          margin: const EdgeInsets.all(20),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+          margin: const EdgeInsets.all(Espaces.xl),
+          padding: const EdgeInsets.all(Espaces.xxl),
           decoration: BoxDecoration(
-            color: Palette.carte,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: ombreCarte,
+            color: context.cl.carte,
+            borderRadius: Rayons.brXl,
+            boxShadow: context.cl.ombreCarte,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: context.cl.orangeFantome,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.lock_outline_rounded,
+                    size: 31, color: Palette.orange),
+              ),
+              const SizedBox(height: Espaces.xl),
               const Text(
                 "Vous n'êtes pas connecté",
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: Espaces.sm),
               const Text(
                 'Il faut au préalable créer un compte pour bénéficier de nos '
                 'services.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12.5,
+                  fontSize: 13.5,
                   height: 1.55,
-                  color: Palette.encreDouce,
+                  color: context.cl.encreDouce,
                 ),
               ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Palette.orangeClair,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  onPressed: () =>
-                      Navigator.of(context).pushReplacementNamed('/auth'),
-                  child: const Text('Créer un compte / se connecter'),
-                ),
+              const SizedBox(height: Espaces.xl),
+              BoutonEnvoyer(
+                bloc: true,
+                libelle: 'Créer un compte',
+                icone: Icons.arrow_forward_rounded,
+                onTap: () =>
+                    Navigator.of(context).pushReplacementNamed('/auth'),
               ),
             ],
           ),

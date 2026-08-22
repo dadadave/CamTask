@@ -72,7 +72,7 @@ class _PageChatState extends State<PageChat> {
     _versLeBas();
 
     return Scaffold(
-      backgroundColor: Palette.fondDoux,
+      backgroundColor: context.cl.fondDoux,
       body: Column(
         children: [
           _enTete(),
@@ -94,8 +94,8 @@ class _PageChatState extends State<PageChat> {
   Widget _enTete() {
     return Container(
       decoration: const BoxDecoration(
-        color: Palette.bleu,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+        gradient: Degrades.bleu,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(Rayons.xl)),
       ),
       child: SafeArea(
         bottom: false,
@@ -127,14 +127,42 @@ class _PageChatState extends State<PageChat> {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'judicael',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Judicaël',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: const BoxDecoration(
+                            color: Palette.succes,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'En ligne',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               const Icon(Icons.more_vert, color: Colors.white),
@@ -157,14 +185,15 @@ class _PageChatState extends State<PageChat> {
           maxWidth: MediaQuery.sizeOf(context).width * 0.78,
         ),
         decoration: BoxDecoration(
-          color: mien ? Palette.bleu : Palette.carte,
+          gradient: mien ? Degrades.bleu : null,
+          color: mien ? null : context.cl.carte,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(14),
-            topRight: const Radius.circular(14),
-            bottomLeft: Radius.circular(mien ? 14 : 4),
-            bottomRight: Radius.circular(mien ? 4 : 14),
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(mien ? 18 : 5),
+            bottomRight: Radius.circular(mien ? 5 : 18),
           ),
-          boxShadow: ombreDouce,
+          boxShadow: context.cl.ombreDouce,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,7 +203,7 @@ class _PageChatState extends State<PageChat> {
               style: TextStyle(
                 fontSize: 13.5,
                 height: 1.45,
-                color: mien ? Colors.white : Palette.encre,
+                color: mien ? Colors.white : context.cl.encre,
               ),
             ),
             if (m.fichier != null) ...[
@@ -185,7 +214,7 @@ class _PageChatState extends State<PageChat> {
                   Icon(
                     Icons.attach_file,
                     size: 13,
-                    color: mien ? Colors.white70 : Palette.encreDouce,
+                    color: mien ? Colors.white70 : context.cl.encreDouce,
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -193,7 +222,7 @@ class _PageChatState extends State<PageChat> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: mien ? Colors.white70 : Palette.encreDouce,
+                      color: mien ? Colors.white70 : context.cl.encreDouce,
                     ),
                   ),
                 ],
@@ -206,7 +235,7 @@ class _PageChatState extends State<PageChat> {
                 m.heure,
                 style: TextStyle(
                   fontSize: 9.5,
-                  color: mien ? Colors.white70 : Palette.grise,
+                  color: mien ? Colors.white70 : context.cl.grise,
                 ),
               ),
             ),
@@ -218,9 +247,17 @@ class _PageChatState extends State<PageChat> {
 
   Widget _barreSaisie() {
     return Container(
-      decoration: const BoxDecoration(
-        color: Palette.bleu,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      decoration: BoxDecoration(
+        color: context.cl.carte,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(Rayons.lg)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x12000000),
+            blurRadius: 20,
+            offset: Offset(0, -4),
+            spreadRadius: -4,
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(12),
       child: Row(
@@ -229,13 +266,14 @@ class _PageChatState extends State<PageChat> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: Palette.fondDoux,
+                color: context.cl.fondDoux,
                 borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: context.cl.ligne),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.sentiment_satisfied_alt,
-                      color: Palette.encreDouce, size: 22),
+                  Icon(Icons.sentiment_satisfied_alt,
+                      color: context.cl.encreDouce, size: 22),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
@@ -250,13 +288,13 @@ class _PageChatState extends State<PageChat> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.photo_camera_outlined,
-                        color: Palette.encreDouce, size: 22),
+                    icon: Icon(Icons.photo_camera_outlined,
+                        color: context.cl.encreDouce, size: 22),
                     onPressed: _joindre,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.attach_file,
-                        color: Palette.encreDouce, size: 22),
+                    icon: Icon(Icons.attach_file,
+                        color: context.cl.encreDouce, size: 22),
                     onPressed: _joindre,
                   ),
                 ],
@@ -264,21 +302,37 @@ class _PageChatState extends State<PageChat> {
             ),
           ),
           const SizedBox(width: 10),
-          Material(
-            color: Palette.bleuFonce,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _envoyer,
-              child: SizedBox(
-                width: 46,
-                height: 46,
-                child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _saisie,
-                  builder: (context, valeur, _) => Icon(
-                    valeur.text.trim().isEmpty ? Icons.mic : Icons.send,
-                    color: Colors.white,
-                    size: 22,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: Degrades.bleu,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Palette.bleuFonce.withValues(alpha: 0.32),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                  spreadRadius: -3,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _envoyer,
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _saisie,
+                    builder: (context, valeur, _) => Icon(
+                      valeur.text.trim().isEmpty
+                          ? Icons.mic_rounded
+                          : Icons.send_rounded,
+                      color: Colors.white,
+                      size: 21,
+                    ),
                   ),
                 ),
               ),

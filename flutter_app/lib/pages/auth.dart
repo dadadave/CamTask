@@ -131,75 +131,70 @@ class _PageAuthState extends State<PageAuth> {
           Transform.translate(
             offset: const Offset(0, -34),
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 14),
-              padding: const EdgeInsets.fromLTRB(20, 22, 20, 26),
+              margin: const EdgeInsets.symmetric(horizontal: Espaces.bord),
+              padding: const EdgeInsets.fromLTRB(22, 26, 22, 28),
               decoration: BoxDecoration(
-                color: Palette.carte,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: ombreCarte,
+                color: context.cl.carte,
+                borderRadius: Rayons.brXl,
+                boxShadow: context.cl.ombreForte,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _Onglet(
-                        libelle: 'sign in',
-                        actif: !_inscription,
-                        onTap: () => setState(() {
-                          _inscription = false;
-                          _erreur = '';
-                        }),
-                      ),
-                      _Onglet(
-                        libelle: 'sign up',
-                        actif: _inscription,
-                        onTap: () => setState(() {
-                          _inscription = true;
-                          _erreur = '';
-                        }),
-                      ),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: context.cl.fondDoux,
+                      borderRadius: Rayons.brPilule,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _Onglet(
+                            libelle: 'Connexion',
+                            actif: !_inscription,
+                            onTap: () => setState(() {
+                              _inscription = false;
+                              _erreur = '';
+                            }),
+                          ),
+                        ),
+                        Expanded(
+                          child: _Onglet(
+                            libelle: 'Inscription',
+                            actif: _inscription,
+                            onTap: () => setState(() {
+                              _inscription = true;
+                              _erreur = '';
+                            }),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 24),
                   if (_inscription) ..._champsInscription() else ..._champsConnexion(),
                   if (_erreur.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     TexteErreur(texte: _erreur),
                   ],
                   const SizedBox(height: 26),
-                  Center(
-                    child: Material(
-                      color: Palette.orangeClair,
-                      borderRadius: BorderRadius.circular(999),
-                      elevation: 1,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(999),
-                        onTap: _inscription ? _inscrire : _connexion,
-                        child: Container(
-                          constraints: const BoxConstraints(minWidth: 170),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 30, vertical: 12),
-                          child: Text(
-                            _inscription ? 'sign up' : 'sign in',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              height: 1.1,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                  BoutonEnvoyer(
+                    bloc: true,
+                    libelle: _inscription ? 'Créer mon compte' : 'Se connecter',
+                    icone: Icons.arrow_forward_rounded,
+                    onTap: _inscription ? _inscrire : _connexion,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: Espaces.lg),
                   const Text(
                     'Il faut au préalable créer un compte pour bénéficier de '
                     'nos services.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Palette.encreDouce),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.5,
+                      color: context.cl.encreDouce,
+                    ),
                   ),
                 ],
               ),
@@ -285,7 +280,7 @@ class _PageAuthState extends State<PageAuth> {
           ),
         ],
         const SizedBox(height: 20),
-        const Text('PIÈCES À FOURNIR', style: Textes.libelle),
+        const LibelleSection(texte: 'Pièces à fournir'),
         const SizedBox(height: 10),
         for (final p in _piecesRequises) ...[
           Televersement(
@@ -311,23 +306,24 @@ class _Onglet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.only(bottom: 4),
-        decoration: actif
-            ? const BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Palette.orange, width: 2),
-                ),
-              )
-            : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          gradient: actif ? Degrades.orange : null,
+          borderRadius: Rayons.brPilule,
+          boxShadow: actif ? ombreOrange : null,
+        ),
         child: Text(
           libelle,
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 17,
+            fontSize: 14.5,
             fontWeight: FontWeight.w700,
-            color: actif ? Palette.orange : Palette.grise,
+            color: actif ? Colors.white : context.cl.encreDouce,
           ),
         ),
       ),
@@ -348,24 +344,40 @@ class _BoutonRole extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
+    return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
         decoration: BoxDecoration(
-          color: actif ? Palette.orange : Colors.transparent,
-          border: Border.all(color: actif ? Palette.orange : Palette.ligne),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          libelle.toUpperCase(),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w700,
-            color: actif ? Colors.white : Palette.encreDouce,
+          color: actif ? context.cl.orangeFantome : context.cl.carte,
+          border: Border.all(
+            color: actif ? Palette.orange : context.cl.ligne,
+            width: actif ? 1.6 : 1,
           ),
+          borderRadius: Rayons.brSm,
+        ),
+        child: Column(
+          children: [
+            Icon(
+              libelle == 'Utilisateur'
+                  ? Icons.person_outline_rounded
+                  : Icons.badge_outlined,
+              size: 20,
+              color: actif ? Palette.orange : context.cl.grise,
+            ),
+            const SizedBox(height: 5),
+            Text(
+              libelle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+                color: actif ? Palette.orange : context.cl.encreDouce,
+              ),
+            ),
+          ],
         ),
       ),
     );

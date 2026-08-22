@@ -1,108 +1,528 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-/// Charte graphique des maquettes CAM-TAXE.
+/// Couleurs de marque CAM-TAXE — identiques en clair et en sombre.
 class Palette {
   const Palette._();
 
   static const orange = Color(0xFFF5893F);
   static const orangeClair = Color(0xFFFBA05C);
-  static const orangeFantome = Color(0xFFFFF3EA);
   static const bleu = Color(0xFF5DA9F5);
   static const bleuFonce = Color(0xFF1E88F0);
+  static const succes = Color(0xFF3F9E63);
+  static const erreur = Color(0xFFD64C2B);
 
-  static const fond = Color(0xFFEDEDED);
-  static const fondDoux = Color(0xFFF6F6F6);
-  static const carte = Colors.white;
-  static const encre = Color(0xFF10100F);
-  static const encreDouce = Color(0xFF55524F);
-  static const grise = Color(0xFFA9A6A3);
-  static const ligne = Color(0xFFDCD9D6);
+  /// Orange légèrement éclairci : meilleure lisibilité sur fond sombre.
+  static const orangeSombre = Color(0xFFFF9E55);
 }
 
-/// Ombre portée commune aux cartes.
-const ombreCarte = <BoxShadow>[
-  BoxShadow(color: Color(0x1A000000), blurRadius: 14, offset: Offset(0, 4)),
+/// Rayons d'arrondi.
+class Rayons {
+  const Rayons._();
+
+  static const sm = 12.0;
+  static const md = 16.0;
+  static const lg = 20.0;
+  static const xl = 26.0;
+  static const pilule = 999.0;
+
+  static BorderRadius r(double v) => BorderRadius.circular(v);
+  static const brSm = BorderRadius.all(Radius.circular(sm));
+  static const brMd = BorderRadius.all(Radius.circular(md));
+  static const brLg = BorderRadius.all(Radius.circular(lg));
+  static const brXl = BorderRadius.all(Radius.circular(xl));
+  static const brPilule = BorderRadius.all(Radius.circular(pilule));
+}
+
+/// Échelle d'espacement (multiples de 4).
+class Espaces {
+  const Espaces._();
+
+  static const xs = 4.0;
+  static const sm = 8.0;
+  static const md = 12.0;
+  static const lg = 16.0;
+  static const xl = 20.0;
+  static const xxl = 28.0;
+  static const bord = 18.0;
+}
+
+/// Dégradés de marque.
+class Degrades {
+  const Degrades._();
+
+  static const orange = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Palette.orangeClair, Palette.orange],
+  );
+
+  static const orangeVif = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [Palette.orange, Palette.orangeClair],
+  );
+
+  static const bleu = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Palette.bleu, Palette.bleuFonce],
+  );
+}
+
+/// Ombre colorée sous les éléments orange — valable dans les deux thèmes.
+final ombreOrange = <BoxShadow>[
+  BoxShadow(
+    color: Palette.orange.withValues(alpha: 0.32),
+    blurRadius: 18,
+    offset: const Offset(0, 8),
+    spreadRadius: -4,
+  ),
 ];
 
-const ombreDouce = <BoxShadow>[
-  BoxShadow(color: Color(0x12000000), blurRadius: 8, offset: Offset(0, 2)),
-];
+/// Nuances neutres : elles changent entre le thème clair et le thème sombre.
+@immutable
+class Nuances extends ThemeExtension<Nuances> {
+  const Nuances({
+    required this.fond,
+    required this.carte,
+    required this.carteHaute,
+    required this.fondDoux,
+    required this.encre,
+    required this.encreDouce,
+    required this.grise,
+    required this.ligne,
+    required this.orangeFantome,
+    required this.bleuFantome,
+    required this.succesFantome,
+    required this.ombreCarte,
+    required this.ombreDouce,
+    required this.ombreForte,
+    required this.sombre,
+  });
 
-ThemeData construireTheme() {
-  final base = ThemeData.light(useMaterial3: true);
+  /// Fond général de l'écran.
+  final Color fond;
+
+  /// Surface des cartes.
+  final Color carte;
+
+  /// Surface légèrement surélevée (feuilles, menus).
+  final Color carteHaute;
+
+  /// Remplissage des champs de saisie.
+  final Color fondDoux;
+
+  final Color encre;
+  final Color encreDouce;
+  final Color grise;
+  final Color ligne;
+
+  /// Fonds teintés des pastilles.
+  final Color orangeFantome;
+  final Color bleuFantome;
+  final Color succesFantome;
+
+  final List<BoxShadow> ombreCarte;
+  final List<BoxShadow> ombreDouce;
+  final List<BoxShadow> ombreForte;
+
+  final bool sombre;
+
+  /// Accent orange adapté au thème (plus clair en sombre).
+  Color get accent => sombre ? Palette.orangeSombre : Palette.orange;
+
+  // ── Thème clair ────────────────────────────────────────────────────
+  // Le fond est un sable chaud : il se marie à l'orange de la marque et
+  // détache nettement les cartes blanches, qui se confondaient avec un
+  // fond quasi blanc.
+  static const clair = Nuances(
+    fond: Color(0xFFF1ECE6),
+    carte: Color(0xFFFFFFFF),
+    carteHaute: Color(0xFFFFFFFF),
+    fondDoux: Color(0xFFF7F3EF),
+    encre: Color(0xFF10100F),
+    encreDouce: Color(0xFF55524F),
+    grise: Color(0xFF9C948C),
+    ligne: Color(0xFFE3DCD4),
+    orangeFantome: Color(0xFFFFF1E4),
+    bleuFantome: Color(0xFFE8F2FE),
+    succesFantome: Color(0xFFEAF6EF),
+    ombreCarte: [
+      BoxShadow(
+        color: Color(0x14000000),
+        blurRadius: 18,
+        offset: Offset(0, 6),
+        spreadRadius: -2,
+      ),
+      BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 1)),
+    ],
+    ombreDouce: [
+      BoxShadow(
+        color: Color(0x0F000000),
+        blurRadius: 12,
+        offset: Offset(0, 3),
+        spreadRadius: -1,
+      ),
+    ],
+    ombreForte: [
+      BoxShadow(
+        color: Color(0x1F000000),
+        blurRadius: 28,
+        offset: Offset(0, 12),
+        spreadRadius: -6,
+      ),
+    ],
+    sombre: false,
+  );
+
+  // ── Thème sombre ───────────────────────────────────────────────────
+  // Gris chauds (teintés vers l'orange) plutôt que gris neutres, pour
+  // rester dans la même famille chromatique que le thème clair.
+  static const sombreN = Nuances(
+    fond: Color(0xFF131110),
+    carte: Color(0xFF1E1B19),
+    carteHaute: Color(0xFF262220),
+    fondDoux: Color(0xFF262220),
+    encre: Color(0xFFF6F2EE),
+    encreDouce: Color(0xFFB4ACA4),
+    grise: Color(0xFF837A72),
+    ligne: Color(0xFF352F2B),
+    orangeFantome: Color(0xFF3A2617),
+    bleuFantome: Color(0xFF16283C),
+    succesFantome: Color(0xFF17301F),
+    // En sombre l'ombre portée ne se voit plus : on l'assombrit fortement
+    // et la séparation vient surtout du contraste des surfaces.
+    ombreCarte: [
+      BoxShadow(
+        color: Color(0x66000000),
+        blurRadius: 16,
+        offset: Offset(0, 6),
+        spreadRadius: -4,
+      ),
+    ],
+    ombreDouce: [
+      BoxShadow(
+        color: Color(0x4D000000),
+        blurRadius: 10,
+        offset: Offset(0, 3),
+        spreadRadius: -2,
+      ),
+    ],
+    ombreForte: [
+      BoxShadow(
+        color: Color(0x8A000000),
+        blurRadius: 30,
+        offset: Offset(0, 14),
+        spreadRadius: -8,
+      ),
+    ],
+    sombre: true,
+  );
+
+  @override
+  Nuances copyWith({
+    Color? fond,
+    Color? carte,
+    Color? carteHaute,
+    Color? fondDoux,
+    Color? encre,
+    Color? encreDouce,
+    Color? grise,
+    Color? ligne,
+    Color? orangeFantome,
+    Color? bleuFantome,
+    Color? succesFantome,
+    List<BoxShadow>? ombreCarte,
+    List<BoxShadow>? ombreDouce,
+    List<BoxShadow>? ombreForte,
+    bool? sombre,
+  }) {
+    return Nuances(
+      fond: fond ?? this.fond,
+      carte: carte ?? this.carte,
+      carteHaute: carteHaute ?? this.carteHaute,
+      fondDoux: fondDoux ?? this.fondDoux,
+      encre: encre ?? this.encre,
+      encreDouce: encreDouce ?? this.encreDouce,
+      grise: grise ?? this.grise,
+      ligne: ligne ?? this.ligne,
+      orangeFantome: orangeFantome ?? this.orangeFantome,
+      bleuFantome: bleuFantome ?? this.bleuFantome,
+      succesFantome: succesFantome ?? this.succesFantome,
+      ombreCarte: ombreCarte ?? this.ombreCarte,
+      ombreDouce: ombreDouce ?? this.ombreDouce,
+      ombreForte: ombreForte ?? this.ombreForte,
+      sombre: sombre ?? this.sombre,
+    );
+  }
+
+  @override
+  Nuances lerp(ThemeExtension<Nuances>? autre, double t) {
+    if (autre is! Nuances) return this;
+    return Nuances(
+      fond: Color.lerp(fond, autre.fond, t)!,
+      carte: Color.lerp(carte, autre.carte, t)!,
+      carteHaute: Color.lerp(carteHaute, autre.carteHaute, t)!,
+      fondDoux: Color.lerp(fondDoux, autre.fondDoux, t)!,
+      encre: Color.lerp(encre, autre.encre, t)!,
+      encreDouce: Color.lerp(encreDouce, autre.encreDouce, t)!,
+      grise: Color.lerp(grise, autre.grise, t)!,
+      ligne: Color.lerp(ligne, autre.ligne, t)!,
+      orangeFantome: Color.lerp(orangeFantome, autre.orangeFantome, t)!,
+      bleuFantome: Color.lerp(bleuFantome, autre.bleuFantome, t)!,
+      succesFantome: Color.lerp(succesFantome, autre.succesFantome, t)!,
+      ombreCarte: t < 0.5 ? ombreCarte : autre.ombreCarte,
+      ombreDouce: t < 0.5 ? ombreDouce : autre.ombreDouce,
+      ombreForte: t < 0.5 ? ombreForte : autre.ombreForte,
+      sombre: t < 0.5 ? sombre : autre.sombre,
+    );
+  }
+}
+
+/// Raccourci : `context.cl.carte`.
+extension NuancesContexte on BuildContext {
+  Nuances get cl =>
+      Theme.of(this).extension<Nuances>() ?? Nuances.clair;
+}
+
+// ── Construction des thèmes ────────────────────────────────────────────
+
+ThemeData construireTheme() => _construire(Nuances.clair, Brightness.light);
+
+ThemeData construireThemeSombre() =>
+    _construire(Nuances.sombreN, Brightness.dark);
+
+ThemeData _construire(Nuances n, Brightness luminosite) {
+  final base = ThemeData(brightness: luminosite, useMaterial3: true);
+  final accent = n.accent;
+
+  final schema = ColorScheme.fromSeed(
+    seedColor: Palette.orange,
+    brightness: luminosite,
+    primary: accent,
+    onPrimary: luminosite == Brightness.dark
+        ? const Color(0xFF231404)
+        : Colors.white,
+    secondary: Palette.bleuFonce,
+    onSecondary: Colors.white,
+    surface: n.carte,
+    onSurface: n.encre,
+    error: Palette.erreur,
+  );
 
   return base.copyWith(
-    scaffoldBackgroundColor: Palette.fond,
-    colorScheme: base.colorScheme.copyWith(
-      primary: Palette.orange,
-      secondary: Palette.orangeClair,
-      surface: Palette.carte,
-    ),
-    textTheme: base.textTheme.apply(
-      bodyColor: Palette.encre,
-      displayColor: Palette.encre,
-    ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Palette.orange,
+    scaffoldBackgroundColor: n.fond,
+    colorScheme: schema,
+    canvasColor: n.fond,
+    splashFactory: InkSparkle.splashFactory,
+    extensions: [n],
+    textTheme: _typo(base.textTheme, n),
+
+    appBarTheme: AppBarTheme(
+      backgroundColor: Colors.transparent,
       foregroundColor: Colors.white,
       elevation: 0,
+      scrolledUnderElevation: 0,
       centerTitle: true,
-      titleTextStyle: TextStyle(
+      systemOverlayStyle: SystemUiOverlayStyle.light,
+      titleTextStyle: const TextStyle(
         color: Colors.white,
-        fontSize: 22,
+        fontSize: 19,
         fontWeight: FontWeight.w800,
-        letterSpacing: 0.5,
+        letterSpacing: 0.2,
+      ),
+      iconTheme: const IconThemeData(color: Colors.white, size: 22),
+    ),
+
+    cardTheme: CardThemeData(
+      color: n.carte,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: Rayons.brLg),
+    ),
+
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: accent,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(0, 52),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        shape: const RoundedRectangleBorder(borderRadius: Rayons.brPilule),
+        textStyle: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
       ),
     ),
-    snackBarTheme: const SnackBarThemeData(
-      backgroundColor: Color(0xFF232120),
-      contentTextStyle: TextStyle(color: Colors.white, fontSize: 13),
+
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: accent,
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+      ),
+    ),
+
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: n.encre,
+        minimumSize: const Size(0, 52),
+        side: BorderSide(color: n.ligne),
+        shape: const RoundedRectangleBorder(borderRadius: Rayons.brPilule),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+    ),
+
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: n.fondDoux,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      hintStyle: TextStyle(
+        color: n.grise,
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
+      border: _bordure(n.ligne),
+      enabledBorder: _bordure(n.ligne),
+      focusedBorder: _bordure(accent, 1.6),
+      errorBorder: _bordure(Palette.erreur),
+      focusedErrorBorder: _bordure(Palette.erreur, 1.6),
+    ),
+
+    dropdownMenuTheme: DropdownMenuThemeData(
+      menuStyle: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(n.carteHaute),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: Rayons.brSm),
+        ),
+      ),
+    ),
+
+    popupMenuTheme: PopupMenuThemeData(
+      color: n.carteHaute,
+      shape: RoundedRectangleBorder(borderRadius: Rayons.brSm),
+    ),
+
+    dividerTheme: DividerThemeData(color: n.ligne, thickness: 1, space: 1),
+
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: n.sombre ? n.carteHaute : const Color(0xFF232120),
+      contentTextStyle: TextStyle(
+        color: n.sombre ? n.encre : Colors.white,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w500,
+      ),
       behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: Rayons.r(Rayons.sm)),
+      insetPadding: const EdgeInsets.all(16),
+    ),
+
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: n.carteHaute,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(Rayons.xl)),
+      ),
+    ),
+
+    dialogTheme: DialogThemeData(
+      backgroundColor: n.carteHaute,
+      shape: RoundedRectangleBorder(borderRadius: Rayons.brLg),
     ),
   );
 }
 
+InputBorder _bordure(Color c, [double w = 1]) => OutlineInputBorder(
+      borderRadius: Rayons.brSm,
+      borderSide: BorderSide(color: c, width: w),
+    );
+
+TextTheme _typo(TextTheme base, Nuances n) =>
+    base.apply(bodyColor: n.encre, displayColor: n.encre).copyWith(
+          headlineSmall: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            height: 1.25,
+            letterSpacing: -0.4,
+          ),
+          titleLarge: const TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+            height: 1.3,
+            letterSpacing: -0.2,
+          ),
+          titleMedium: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+          bodyMedium: const TextStyle(fontSize: 14, height: 1.55),
+          bodySmall: TextStyle(
+            fontSize: 12.5,
+            height: 1.5,
+            color: n.encreDouce,
+          ),
+        );
+
 /// Styles de texte réutilisés dans les écrans.
+///
+/// Ceux qui portent une couleur neutre sont des méthodes prenant le
+/// contexte, afin de suivre le thème clair / sombre.
 class Textes {
   const Textes._();
 
   static const titreService = TextStyle(
-    fontSize: 13,
-    fontWeight: FontWeight.w800,
-    height: 1.3,
-  );
-
-  static const sousTitreService = TextStyle(
-    fontSize: 10,
+    fontSize: 14.5,
     fontWeight: FontWeight.w700,
-    color: Palette.encreDouce,
     height: 1.3,
+    letterSpacing: -0.1,
   );
-
-  static const libelle = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w700,
-    color: Palette.encreDouce,
-    letterSpacing: 0.3,
-  );
-
-  static const corps = TextStyle(fontSize: 12.5, height: 1.55);
 
   static const corpsGras = TextStyle(
-    fontSize: 12.5,
-    height: 1.55,
+    fontSize: 14,
+    height: 1.6,
     fontWeight: FontWeight.w600,
   );
 
   static const titrePanneau = TextStyle(
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: FontWeight.w800,
     height: 1.35,
+    letterSpacing: -0.1,
+  );
+
+  static const titreEcran = TextStyle(
+    fontSize: 22,
+    fontWeight: FontWeight.w800,
+    height: 1.25,
+    letterSpacing: -0.4,
+    color: Colors.white,
   );
 
   static const erreur = TextStyle(
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: FontWeight.w600,
-    color: Color(0xFFD64C2B),
+    color: Palette.erreur,
   );
+
+  static TextStyle sousTitreService(BuildContext c) => TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: c.cl.encreDouce,
+        height: 1.35,
+      );
+
+  static TextStyle libelle(BuildContext c) => TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: c.cl.encreDouce,
+        letterSpacing: 0.6,
+      );
+
+  static TextStyle corps(BuildContext c) => TextStyle(
+        fontSize: 14,
+        height: 1.6,
+        color: c.cl.encreDouce,
+      );
 }

@@ -123,7 +123,7 @@ class _PageNiuAcfState extends State<PageNiuAcf> {
             children: [
               const Text(
                 'QUE SOUHAITEZ-VOUS FAIRE ? (NIU, ACF OU LES DEUX)',
-                style: Textes.libelle,
+                style: Textes.libelle(context),
               ),
               const SizedBox(height: 10),
               Pastilles(
@@ -183,7 +183,7 @@ class _PageNiuAcfState extends State<PageNiuAcf> {
               ),
               Champ(libelle: 'NIU', controleur: _niu),
               const SizedBox(height: 18),
-              const Text('DOCUMENT SOUHAITÉ', style: Textes.libelle),
+              Text('DOCUMENT SOUHAITÉ', style: Textes.libelle(context)),
               const SizedBox(height: 10),
               Pastilles(
                 options: _attestations,

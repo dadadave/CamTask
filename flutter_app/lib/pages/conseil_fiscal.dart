@@ -69,7 +69,7 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
         const Encadre(enfants: [Text(conseilAccroche, style: Textes.corpsGras)]),
         const Encadre(
           enfants: [
-            Text(conseilIntro, style: Textes.corps, textAlign: TextAlign.justify),
+            Text(conseilIntro, style: Textes.corps(context), textAlign: TextAlign.justify),
           ],
         ),
         for (final q in questionsConseil) _question(q),
@@ -108,7 +108,7 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Material(
-            color: Palette.carte,
+            color: context.cl.carte,
             borderRadius: BorderRadius.circular(12),
             elevation: 1,
             child: InkWell(
@@ -194,7 +194,7 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
-            color: actif ? Palette.orangeFantome : Palette.fondDoux,
+            color: actif ? context.cl.orangeFantome : context.cl.fondDoux,
             border: Border.all(
               color: actif ? Palette.orange : Colors.transparent,
             ),

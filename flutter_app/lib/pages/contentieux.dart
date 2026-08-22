@@ -97,7 +97,7 @@ class _PageContentieuxState extends State<PageContentieux> {
                 lignes: 6,
               ),
               const SizedBox(height: 22),
-              const Text('JOINDRE VOS DOCUMENTS', style: Textes.libelle),
+              Text('JOINDRE VOS DOCUMENTS', style: Textes.libelle(context)),
               const SizedBox(height: 10),
               for (final p in _pieces) ...[
                 Televersement(

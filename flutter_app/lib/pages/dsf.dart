@@ -76,7 +76,7 @@ class _PageDsfState extends State<PageDsf> {
               const SizedBox(height: 22),
               const Text(
                 'DSF POUR IMPÔT OU DSF POUR LA BANQUE ?',
-                style: Textes.libelle,
+                style: Textes.libelle(context),
               ),
               const SizedBox(height: 10),
               Pastilles(
