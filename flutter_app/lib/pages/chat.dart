@@ -249,8 +249,8 @@ class _PageChatState extends State<PageChat> {
     return Container(
       decoration: BoxDecoration(
         color: context.cl.carte,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(Rayons.lg)),
-        boxShadow: [
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(Rayons.lg)),
+        boxShadow: const [
           BoxShadow(
             color: Color(0x12000000),
             blurRadius: 20,

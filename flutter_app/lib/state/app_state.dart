@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
 
 const _cle = 'mon-comptable:v1';
+
+/// Préférence d'affichage de l'utilisateur.
+enum ModeTheme { systeme, clair, sombre }
 
 const _messageAccueil = Message(
   id: 'bienvenue',
@@ -22,6 +25,7 @@ const _messageAccueil = Message(
 /// Persisté dans les préférences locales de l'appareil.
 class AppState extends ChangeNotifier {
   Compte? _compte;
+  ModeTheme _mode = ModeTheme.systeme;
   List<Demande> _demandes = [];
   List<Message> _messages = [_messageAccueil];
   SharedPreferences? _prefs;
@@ -31,12 +35,32 @@ class AppState extends ChangeNotifier {
   List<Message> get messages => List.unmodifiable(_messages);
   bool get connecte => _compte != null;
 
+  /// Mode d'affichage choisi : clair, sombre ou celui du système.
+  ModeTheme get mode => _mode;
+
+  ThemeMode get themeMode => switch (_mode) {
+        ModeTheme.clair => ThemeMode.light,
+        ModeTheme.sombre => ThemeMode.dark,
+        ModeTheme.systeme => ThemeMode.system,
+      };
+
+  void changerMode(ModeTheme m) {
+    if (m == _mode) return;
+    _mode = m;
+    notifyListeners();
+    _sauver();
+  }
+
   Future<void> charger() async {
     _prefs = await SharedPreferences.getInstance();
     final brut = _prefs?.getString(_cle);
     if (brut == null) return;
     try {
       final j = jsonDecode(brut) as Map<String, dynamic>;
+      _mode = ModeTheme.values.firstWhere(
+        (m) => m.name == j['mode'],
+        orElse: () => ModeTheme.systeme,
+      );
       final c = j['compte'];
       _compte = c == null ? null : Compte.depuisJson(c as Map<String, dynamic>);
       _demandes = ((j['demandes'] as List<dynamic>?) ?? const [])
@@ -56,6 +80,7 @@ class AppState extends ChangeNotifier {
     await _prefs?.setString(
       _cle,
       jsonEncode({
+        'mode': _mode.name,
         'compte': _compte?.versJson(),
         'demandes': _demandes.map((d) => d.versJson()).toList(),
         'messages': _messages.map((m) => m.versJson()).toList(),

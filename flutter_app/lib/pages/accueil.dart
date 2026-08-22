@@ -230,6 +230,7 @@ class _CarteAccroche extends StatelessWidget {
         color: context.cl.carte,
         borderRadius: Rayons.brXl,
         boxShadow: context.cl.ombreCarte,
+        border: Border.all(color: context.cl.ligne),
       ),
       child: Row(
         children: [
@@ -349,9 +350,10 @@ class _Tuile extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(Espaces.lg),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             borderRadius: Rayons.brLg,
             boxShadow: context.cl.ombreCarte,
+            border: Border.all(color: context.cl.ligne),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,7 +413,7 @@ class _AucunResultat extends StatelessWidget {
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 5),
-          const Text(
+          Text(
             'Essayez un autre mot-clé.',
             style: TextStyle(fontSize: 13, color: context.cl.encreDouce),
           ),

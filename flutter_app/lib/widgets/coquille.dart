@@ -42,15 +42,10 @@ class NavigationBasse extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: context.cl.carte,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(Rayons.xl)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 24,
-            offset: Offset(0, -6),
-            spreadRadius: -4,
-          ),
-        ],
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(Rayons.xl)),
+        border: Border(top: BorderSide(color: context.cl.ligne)),
+        boxShadow: context.cl.ombreForte,
       ),
       child: SafeArea(
         top: false,

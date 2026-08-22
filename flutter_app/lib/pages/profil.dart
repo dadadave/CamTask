@@ -27,6 +27,7 @@ class PageProfil extends StatelessWidget {
               color: context.cl.carte,
               borderRadius: Rayons.brXl,
               boxShadow: context.cl.ombreCarte,
+              border: Border.all(color: context.cl.ligne),
             ),
             child: Column(
               children: [
@@ -50,7 +51,7 @@ class PageProfil extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: Espaces.sm),
-                const Text(
+                Text(
                   'Il faut au préalable créer un compte pour bénéficier de nos '
                   'services et suivre vos demandes.',
                   textAlign: TextAlign.center,
@@ -90,6 +91,7 @@ class PageProfil extends StatelessWidget {
             color: context.cl.carte,
             borderRadius: Rayons.brXl,
             boxShadow: context.cl.ombreCarte,
+            border: Border.all(color: context.cl.ligne),
           ),
           child: Column(
             children: [
@@ -143,7 +145,7 @@ class PageProfil extends StatelessWidget {
               const SizedBox(height: Espaces.sm),
               Text(
                 'Membre depuis le ${compte.creeLe}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   color: context.cl.grise,
                   fontWeight: FontWeight.w500,
@@ -161,6 +163,7 @@ class PageProfil extends StatelessWidget {
               color: context.cl.carte,
               borderRadius: Rayons.brLg,
               boxShadow: context.cl.ombreCarte,
+              border: Border.all(color: context.cl.ligne),
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -189,6 +192,24 @@ class PageProfil extends StatelessWidget {
               ],
             ),
           ),
+        ),
+
+        // ── Apparence ─────────────────────────────────────────────────
+        const Padding(
+          padding: EdgeInsets.fromLTRB(
+              Espaces.bord, Espaces.xxl, Espaces.bord, Espaces.md),
+          child: Text(
+            'Apparence',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: Espaces.bord),
+          child: SelecteurTheme(),
         ),
 
         // ── Demandes ──────────────────────────────────────────────────
@@ -235,15 +256,15 @@ class PageProfil extends StatelessWidget {
               borderRadius: Rayons.brLg,
               boxShadow: context.cl.ombreDouce,
             ),
-            child: const Column(
+            child: Column(
               children: [
                 Icon(Icons.inbox_outlined, size: 34, color: context.cl.grise),
-                SizedBox(height: Espaces.md),
-                Text(
+                const SizedBox(height: Espaces.md),
+                const Text(
                   "Aucune demande pour l'instant",
                   style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
                 ),
-                SizedBox(height: 5),
+                const SizedBox(height: 5),
                 Text(
                   'Rendez-vous dans « Services » pour en créer une.',
                   textAlign: TextAlign.center,
@@ -320,7 +341,7 @@ class _Ligne extends StatelessWidget {
           Expanded(
             child: Text(
               libelle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: context.cl.encreDouce,
@@ -358,9 +379,13 @@ class _CarteDemande extends StatelessWidget {
         color: context.cl.carte,
         borderRadius: Rayons.brLg,
         boxShadow: context.cl.ombreCarte,
+        border: Border.all(color: context.cl.ligne),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Row(
+      // IntrinsicHeight : le liseré gauche doit courir sur toute la hauteur
+      // de la carte, or un Row "stretch" en hauteur libre force l'infini.
+      child: IntrinsicHeight(
+        child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(width: 4, color: Palette.orange),
@@ -387,7 +412,7 @@ class _CarteDemande extends StatelessWidget {
                       const SizedBox(width: Espaces.sm),
                       Text(
                         demande.date,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           color: context.cl.grise,
                           fontWeight: FontWeight.w500,
@@ -398,7 +423,7 @@ class _CarteDemande extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     demande.resume,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12.5,
                       height: 1.5,
                       color: context.cl.encreDouce,
@@ -416,7 +441,7 @@ class _CarteDemande extends StatelessWidget {
                           child: Text(
                             '${demande.pieces.length} document(s) : '
                             '${demande.pieces.map((p) => p.fichier).join(', ')}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
                               height: 1.45,
                               color: context.cl.grise,
@@ -462,6 +487,7 @@ class _CarteDemande extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }

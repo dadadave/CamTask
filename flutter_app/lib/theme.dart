@@ -129,8 +129,10 @@ class Nuances extends ThemeExtension<Nuances> {
 
   final bool sombre;
 
-  /// Accent orange adapté au thème (plus clair en sombre).
-  Color get accent => sombre ? Palette.orangeSombre : Palette.orange;
+  /// Accent de marque. Volontairement identique dans les deux thèmes :
+  /// l'orange reste lisible sur fond sombre, et deux nuances différentes
+  /// jureraient avec les nombreux usages directs de [Palette.orange].
+  Color get accent => Palette.orange;
 
   // ── Thème clair ────────────────────────────────────────────────────
   // Le fond est un sable chaud : il se marie à l'orange de la marque et
@@ -319,27 +321,27 @@ ThemeData _construire(Nuances n, Brightness luminosite) {
     extensions: [n],
     textTheme: _typo(base.textTheme, n),
 
-    appBarTheme: AppBarTheme(
+    appBarTheme: const AppBarTheme(
       backgroundColor: Colors.transparent,
       foregroundColor: Colors.white,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: true,
       systemOverlayStyle: SystemUiOverlayStyle.light,
-      titleTextStyle: const TextStyle(
+      titleTextStyle: TextStyle(
         color: Colors.white,
         fontSize: 19,
         fontWeight: FontWeight.w800,
         letterSpacing: 0.2,
       ),
-      iconTheme: const IconThemeData(color: Colors.white, size: 22),
+      iconTheme: IconThemeData(color: Colors.white, size: 22),
     ),
 
     cardTheme: CardThemeData(
       color: n.carte,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: Rayons.brLg),
+      shape: const RoundedRectangleBorder(borderRadius: Rayons.brLg),
     ),
 
     filledButtonTheme: FilledButtonThemeData(
@@ -394,7 +396,7 @@ ThemeData _construire(Nuances n, Brightness luminosite) {
     dropdownMenuTheme: DropdownMenuThemeData(
       menuStyle: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(n.carteHaute),
-        shape: WidgetStatePropertyAll(
+        shape: const WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: Rayons.brSm),
         ),
       ),
@@ -402,7 +404,7 @@ ThemeData _construire(Nuances n, Brightness luminosite) {
 
     popupMenuTheme: PopupMenuThemeData(
       color: n.carteHaute,
-      shape: RoundedRectangleBorder(borderRadius: Rayons.brSm),
+      shape: const RoundedRectangleBorder(borderRadius: Rayons.brSm),
     ),
 
     dividerTheme: DividerThemeData(color: n.ligne, thickness: 1, space: 1),
@@ -428,7 +430,7 @@ ThemeData _construire(Nuances n, Brightness luminosite) {
 
     dialogTheme: DialogThemeData(
       backgroundColor: n.carteHaute,
-      shape: RoundedRectangleBorder(borderRadius: Rayons.brLg),
+      shape: const RoundedRectangleBorder(borderRadius: Rayons.brLg),
     ),
   );
 }

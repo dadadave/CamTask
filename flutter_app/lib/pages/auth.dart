@@ -186,7 +186,7 @@ class _PageAuthState extends State<PageAuth> {
                     onTap: _inscription ? _inscrire : _connexion,
                   ),
                   const SizedBox(height: Espaces.lg),
-                  const Text(
+                  Text(
                     'Il faut au préalable créer un compte pour bénéficier de '
                     'nos services.',
                     textAlign: TextAlign.center,

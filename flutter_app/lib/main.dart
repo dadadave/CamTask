@@ -31,12 +31,19 @@ class MonComptable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ListenableBuilder : le MaterialApp doit se reconstruire quand le mode
+    // d'affichage change, sinon le basculement clair/sombre resterait sans
+    // effet (PorteeApp ne rebâtit que ses descendants).
     return PorteeApp(
       etat: etat,
-      child: MaterialApp(
+      child: ListenableBuilder(
+        listenable: etat,
+        builder: (context, _) => MaterialApp(
         title: 'Mon Comptable — CAM-TAXE',
         debugShowCheckedModeBanner: false,
         theme: construireTheme(),
+        darkTheme: construireThemeSombre(),
+        themeMode: etat.themeMode,
         initialRoute: '/accueil',
         routes: {
           '/accueil': (_) => const PageAccueil(),
@@ -57,6 +64,7 @@ class MonComptable extends StatelessWidget {
           '/service/niu-acf': (_) => const RequiertCompte(child: PageNiuAcf()),
           '/service/audit': (_) => const RequiertCompte(child: PageAudit()),
         },
+        ),
       ),
     );
   }
@@ -84,6 +92,7 @@ class RequiertCompte extends StatelessWidget {
             color: context.cl.carte,
             borderRadius: Rayons.brXl,
             boxShadow: context.cl.ombreCarte,
+            border: Border.all(color: context.cl.ligne),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -108,7 +117,7 @@ class RequiertCompte extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: Espaces.sm),
-              const Text(
+              Text(
                 'Il faut au préalable créer un compte pour bénéficier de nos '
                 'services.',
                 textAlign: TextAlign.center,

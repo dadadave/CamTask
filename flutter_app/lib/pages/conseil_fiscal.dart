@@ -67,7 +67,7 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
       enfants: [
         const EnTeteService(libelle: 'Besoin de conseil fiscale'),
         const Encadre(enfants: [Text(conseilAccroche, style: Textes.corpsGras)]),
-        const Encadre(
+        Encadre(
           enfants: [
             Text(conseilIntro, style: Textes.corps(context), textAlign: TextAlign.justify),
           ],

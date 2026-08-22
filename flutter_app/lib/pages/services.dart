@@ -48,9 +48,10 @@ class _CarteService extends StatelessWidget {
         onTap: () => Navigator.of(context).pushNamed(service.route),
         child: Container(
           padding: const EdgeInsets.all(Espaces.lg),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             borderRadius: Rayons.brLg,
             boxShadow: context.cl.ombreCarte,
+            border: Border.all(color: context.cl.ligne),
           ),
           child: Row(
             children: [

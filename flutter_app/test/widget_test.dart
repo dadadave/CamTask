@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mon_comptable/main.dart';
 import 'package:mon_comptable/models.dart';
 import 'package:mon_comptable/state/app_state.dart';
+import 'package:mon_comptable/theme.dart';
 
 Future<AppState> _etatNeuf() async {
   SharedPreferences.setMockInitialValues({});
@@ -17,7 +18,7 @@ Future<AppState> _etatNeuf() async {
 /// viewport de test elle est sous la ligne de flottaison, il faut donc
 /// l'amener à l'écran avant de la toucher.
 Future<void> _ouvrirAudit(WidgetTester tester) async {
-  final cible = find.text('FAIRE UN AUDIT');
+  final cible = find.text('Faire un audit').last;
   await tester.ensureVisible(cible);
   await tester.pumpAndSettle();
   await tester.tap(cible);
@@ -30,10 +31,10 @@ void main() {
     await tester.pumpWidget(MonComptable(etat: await _etatNeuf()));
     await tester.pumpAndSettle();
 
-    expect(find.text('faites vos declaration chez nous'), findsOneWidget);
-    expect(find.text('100% sur et rapide'), findsOneWidget);
-    expect(find.text('BESOIN DE CONSEIL FISCALE'), findsOneWidget);
-    expect(find.text('FAIRE UN AUDIT'), findsOneWidget);
+    expect(find.text('Faites vos déclarations chez nous'), findsOneWidget);
+    expect(find.text('100 % sûr'), findsOneWidget);
+    expect(find.text('Besoin de conseil fiscal'), findsOneWidget);
+    expect(find.text('Faire un audit'), findsOneWidget);
   });
 
   testWidgets('la recherche filtre les services', (tester) async {
@@ -43,8 +44,8 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'audit');
     await tester.pumpAndSettle();
 
-    expect(find.text('FAIRE UN AUDIT'), findsOneWidget);
-    expect(find.text('BESOIN DE CONSEIL FISCALE'), findsNothing);
+    expect(find.text('Faire un audit'), findsOneWidget);
+    expect(find.text('Besoin de conseil fiscal'), findsNothing);
   });
 
   testWidgets('un service exige un compte', (tester) async {
@@ -78,8 +79,8 @@ void main() {
     await _ouvrirAudit(tester);
 
     // Le formulaire de l'audit, dans l'ordre demandé.
-    expect(find.text('NOM DE LA STRUCTURE'), findsOneWidget);
-    expect(find.text("TYPE D'AUDIT"), findsOneWidget);
+    expect(find.text('Nom de la structure'), findsOneWidget);
+    expect(find.text("Type d'audit"), findsOneWidget);
     expect(find.text('PAIEMENT DE CAUTION'), findsOneWidget);
 
     // Les sections de documents et le bouton agent sont en bas de la page :
@@ -128,7 +129,54 @@ void main() {
     await tester.tap(find.text('Profil'));
     await tester.pumpAndSettle();
 
-    expect(find.text('MES DEMANDES (1)'), findsOneWidget);
-    expect(find.text('ENVOYÉE'), findsOneWidget);
+    // La section des demandes est sous la ligne de flottaison (carte
+    // d'identité, coordonnées puis réglage d'apparence la précèdent).
+    await tester.scrollUntilVisible(
+      find.text('Mes demandes'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Mes demandes'), findsOneWidget);
+    expect(find.text('Envoyée'), findsOneWidget);
+  });
+
+  _testsTheme();
+}
+
+/// Le thème sombre doit se construire et se rendre sans casse : c'est là
+/// que se voient les couleurs oubliées en dur ou l'extension absente.
+void _testsTheme() {
+  testWidgets('le mode sombre se rend et applique ses nuances',
+      (tester) async {
+    final etat = await _etatNeuf();
+    etat.changerMode(ModeTheme.sombre);
+
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+
+    final contexte = tester.element(find.text('Nos services'));
+    final nuances = Theme.of(contexte).extension<Nuances>();
+
+    expect(nuances, isNotNull, reason: 'extension Nuances absente');
+    expect(nuances!.sombre, isTrue);
+    expect(Theme.of(contexte).brightness, Brightness.dark);
+  });
+
+  testWidgets('le mode clair reste le réglage par défaut', (tester) async {
+    final etat = await _etatNeuf();
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+
+    final contexte = tester.element(find.text('Nos services'));
+    expect(Theme.of(contexte).extension<Nuances>()!.sombre, isFalse);
+    expect(etat.mode, ModeTheme.systeme);
+  });
+
+  testWidgets('le choix de thème est conservé dans l\'état', (tester) async {
+    final etat = await _etatNeuf();
+    etat.changerMode(ModeTheme.sombre);
+    expect(etat.themeMode, ThemeMode.dark);
+    etat.changerMode(ModeTheme.clair);
+    expect(etat.themeMode, ThemeMode.light);
   });
 }

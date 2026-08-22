@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../state/app_state.dart';
 import '../theme.dart';
 import 'illustrations.dart';
 
@@ -27,6 +28,7 @@ class EnTeteService extends StatelessWidget {
         color: context.cl.carte,
         borderRadius: Rayons.brLg,
         boxShadow: context.cl.ombreCarte,
+        border: Border.all(color: context.cl.ligne),
       ),
       child: Row(
         children: [
@@ -137,7 +139,7 @@ class Champ extends StatelessWidget {
           controller: controleur,
           keyboardType: clavier,
           obscureText: masque,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14.5,
             fontWeight: FontWeight.w500,
             color: context.cl.encre,
@@ -160,7 +162,7 @@ class Champ extends StatelessWidget {
               Expanded(
                 child: Text(
                   aide!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11.5,
                     height: 1.4,
                     color: context.cl.encreDouce,
@@ -236,7 +238,7 @@ class Selecteur extends StatelessWidget {
           fontWeight: FontWeight.w500,
         ),
       ),
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14.5,
         fontWeight: FontWeight.w500,
         color: context.cl.encre,
@@ -531,22 +533,27 @@ class Encadre extends StatelessWidget {
         color: context.cl.carte,
         borderRadius: Rayons.brLg,
         boxShadow: context.cl.ombreCarte,
+        border: Border.all(color: context.cl.ligne),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(width: 4, color: c),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(Espaces.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: enfants,
+      // IntrinsicHeight : sans lui, le Row « stretch » réclamerait une
+      // hauteur infinie dans une liste défilante.
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 4, color: c),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(Espaces.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: enfants,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -606,26 +613,27 @@ class DiscuterAgent extends StatelessWidget {
               Navigator.of(context).pushNamed('/chat', arguments: sujet),
           child: Container(
             padding: const EdgeInsets.all(Espaces.lg),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               borderRadius: Rayons.brLg,
               boxShadow: context.cl.ombreCarte,
+              border: Border.all(color: context.cl.ligne),
             ),
             child: Row(
               children: [
                 const AvatarAgent(taille: 52),
                 const SizedBox(width: Espaces.lg),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Discuter avec un agent',
                         style: TextStyle(
                           fontSize: 14.5,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      SizedBox(height: 3),
+                      const SizedBox(height: 3),
                       Text(
                         'Un conseiller vous répond directement.',
                         style: TextStyle(
@@ -678,6 +686,82 @@ class TexteErreur extends StatelessWidget {
               size: 15, color: Palette.erreur),
           const SizedBox(width: 7),
           Expanded(child: Text(texte, style: Textes.erreur)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Sélecteur d'apparence : clair, sombre ou réglage du système.
+class SelecteurTheme extends StatelessWidget {
+  const SelecteurTheme({super.key});
+
+  static const _options = <({ModeTheme mode, String libelle, IconData icone})>[
+    (mode: ModeTheme.clair, libelle: 'Clair', icone: Icons.light_mode_rounded),
+    (mode: ModeTheme.sombre, libelle: 'Sombre', icone: Icons.dark_mode_rounded),
+    (
+      mode: ModeTheme.systeme,
+      libelle: 'Système',
+      icone: Icons.brightness_auto_rounded
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final etat = PorteeApp.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: context.cl.carte,
+        borderRadius: Rayons.brPilule,
+        border: Border.all(color: context.cl.ligne),
+        boxShadow: context.cl.ombreDouce,
+      ),
+      child: Row(
+        children: [
+          for (final o in _options)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => etat.changerMode(o.mode),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  decoration: BoxDecoration(
+                    gradient: etat.mode == o.mode ? Degrades.orange : null,
+                    borderRadius: Rayons.brPilule,
+                    boxShadow: etat.mode == o.mode ? ombreOrange : null,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        o.icone,
+                        size: 16,
+                        color: etat.mode == o.mode
+                            ? Colors.white
+                            : context.cl.encreDouce,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          o.libelle,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: etat.mode == o.mode
+                                ? Colors.white
+                                : context.cl.encreDouce,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

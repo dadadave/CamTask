@@ -97,11 +97,15 @@ class IllustrationTax extends StatelessWidget {
     return Container(
       height: 250,
       width: double.infinity,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
+        // Le fond suit le thème : un gris clair en mode clair, un gris chaud
+        // sombre sinon — sans quoi ce bandeau resterait une tache claire.
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFDFE2E5), Color(0xFFCFD3D7)],
+          colors: context.cl.sombre
+              ? const [Color(0xFF2A2521), Color(0xFF1C1917)]
+              : const [Color(0xFFDFE2E5), Color(0xFFCFD3D7)],
         ),
       ),
       child: CustomPaint(painter: _PeintreTax()),
