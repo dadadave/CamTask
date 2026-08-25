@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../models.dart';
+import '../api/api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/coquille.dart';
@@ -46,24 +47,45 @@ class _PageChatState extends State<PageChat> {
     });
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final texte = _saisie.text.trim();
     if (texte.isEmpty) return;
-    PorteeApp.of(context).envoyerMessage(texte);
-    _saisie.clear();
-    _versLeBas();
+    await _transmettre(texte);
   }
 
   Future<void> _joindre() async {
-    final res = await FilePicker.platform.pickFiles(withData: false);
+    // `withData: true` : sans le contenu, il n'y aurait rien à téléverser.
+    final res = await FilePicker.platform.pickFiles(withData: true);
     if (res == null || res.files.isEmpty || !mounted) return;
+    final f = res.files.first;
+    final octets = f.bytes;
+    if (octets == null) return;
+
     final texte = _saisie.text.trim();
-    PorteeApp.of(context).envoyerMessage(
+    await _transmettre(
       texte.isEmpty ? 'Document joint' : texte,
-      fichier: res.files.first.name,
+      piece: PieceEnvoi(
+        libelle: 'Pièce jointe',
+        nomFichier: f.name,
+        octets: octets,
+      ),
     );
+  }
+
+  Future<void> _transmettre(String texte, {PieceEnvoi? piece}) async {
+    // Capturés avant l'attente : après un `await`, le contexte peut ne plus
+    // être monté.
+    final etat = PorteeApp.of(context);
+    final messager = ScaffoldMessenger.of(context);
     _saisie.clear();
-    _versLeBas();
+    try {
+      await etat.envoyerMessage(texte, piece: piece);
+      _versLeBas();
+    } catch (e) {
+      messager.showSnackBar(SnackBar(content: Text(messageErreur(e))));
+      // Le message n'est pas parti : on le rend à l'utilisateur.
+      if (mounted && piece == null) _saisie.text = texte;
+    }
   }
 
   @override

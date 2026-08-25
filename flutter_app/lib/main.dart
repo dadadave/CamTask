@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'api/api.dart';
 import 'pages/accueil.dart';
 import 'pages/audit.dart';
 import 'pages/auth.dart';
@@ -31,6 +32,10 @@ class MonComptable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!backend.configure) {
+      return _ConfigurationManquante(message: backend.messageConfiguration);
+    }
+
     // ListenableBuilder : le MaterialApp doit se reconstruire quand le mode
     // d'affichage change, sinon le basculement clair/sombre resterait sans
     // effet (PorteeApp ne rebâtit que ses descendants).
@@ -70,6 +75,59 @@ class MonComptable extends StatelessWidget {
   }
 }
 
+/// Affiché quand les clés Supabase n'ont pas été fournies à la compilation :
+/// sans back-end, aucun écran ne peut fonctionner. Mieux vaut le dire que
+/// d'échouer sans un mot.
+class _ConfigurationManquante extends StatelessWidget {
+  const _ConfigurationManquante({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: construireTheme(),
+      home: Scaffold(
+        // Builder : un contexte pris sous le MaterialApp, donc muni du thème.
+        body: Builder(
+          builder: (context) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(Espaces.xxl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.settings_outlined,
+                    size: 46,
+                    color: Palette.orange,
+                  ),
+                  const SizedBox(height: Espaces.xl),
+                  const Text(
+                    'Application non configurée',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: Espaces.md),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.55,
+                      color: context.cl.encreDouce,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Un compte est requis pour accéder aux services : sans compte, on
 /// propose l'inscription plutôt que d'afficher le formulaire.
 class RequiertCompte extends StatelessWidget {
@@ -80,6 +138,16 @@ class RequiertCompte extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final etat = PorteeApp.of(context);
+
+    // Tant que la session enregistrée n'a pas été relue, on ne sait pas
+    // encore si l'utilisateur est connecté : lui proposer de s'inscrire le
+    // déconnecterait en apparence à chaque ouverture de l'application.
+    if (!etat.pret) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (etat.connecte) return child;
 
     return Scaffold(

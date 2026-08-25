@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models.dart';
+import '../api/api.dart';
 import '../state/app_state.dart';
 import '../widgets/communs.dart';
 import '../widgets/coquille.dart';
@@ -37,7 +37,8 @@ class _PageDeclarerState extends State<PageDeclarer> {
   final _nature = TextEditingController();
   String? _type;
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  bool _envoi = false;
+  final _fichiers = <String, PieceEnvoi>{};
 
   @override
   void dispose() {
@@ -47,7 +48,7 @@ class _PageDeclarerState extends State<PageDeclarer> {
     super.dispose();
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final manquants = <String>[
       if (_niu.text.trim().isEmpty) 'NIU',
       if (_type == null) "Type d'impôts",
@@ -59,22 +60,34 @@ class _PageDeclarerState extends State<PageDeclarer> {
       return;
     }
 
-    PorteeApp.of(context).envoyerDemande(
-      serviceId: 'declarer',
-      serviceLibelle: 'Declarer et payer vos impots',
-      resume: 'NIU ${_niu.text} — $_type — ${_montant.text} FCFA — '
-          'Activité : ${_nature.text}',
-      pieces: [
-        for (final e in _fichiers.entries)
-          Piece(libelle: e.key, fichier: e.value),
-      ],
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Déclaration transmise. Un agent valide le montant à payer.'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
+    // Capturés avant l'attente : après un `await`, le contexte peut
+    // ne plus être monté.
+    final etat = PorteeApp.of(context);
+    final messager = ScaffoldMessenger.of(context);
+    final navigateur = Navigator.of(context);
+    setState(() {
+      _erreur = '';
+      _envoi = true;
+    });
+    try {
+      await etat.envoyerDemande(
+        serviceId: 'declarer',
+        serviceLibelle: 'Declarer et payer vos impots',
+        resume: 'NIU ${_niu.text} — $_type — ${_montant.text} FCFA — '
+            'Activité : ${_nature.text}',
+        pieces: _fichiers.values.toList(),
+      );
+      messager.showSnackBar(
+        const SnackBar(
+          content: Text('Déclaration transmise. Un agent valide le montant à payer.'),
+        ),
+      );
+      navigateur.pushNamedAndRemoveUntil('/profil', (r) => false);
+    } catch (e) {
+      if (mounted) setState(() => _erreur = messageErreur(e));
+    } finally {
+      if (mounted) setState(() => _envoi = false);
+    }
   }
 
   @override
@@ -109,7 +122,7 @@ class _PageDeclarerState extends State<PageDeclarer> {
               for (final p in _pieces) ...[
                 Televersement(
                   libelle: p,
-                  fichier: _fichiers[p],
+                  fichier: _fichiers[p]?.nomFichier,
                   onChoisi: (n) => setState(() => _fichiers[p] = n),
                 ),
                 const SizedBox(height: 22),
@@ -118,7 +131,7 @@ class _PageDeclarerState extends State<PageDeclarer> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoyer(onTap: _envoyer, enCours: _envoi),
             ],
           ),
         ),

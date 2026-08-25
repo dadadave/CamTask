@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/dsf.dart';
-import '../models.dart';
+import '../api/api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
@@ -19,7 +19,8 @@ class _PageDsfState extends State<PageDsf> {
   final _entreprise = TextEditingController();
   String _destination = '';
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  bool _envoi = false;
+  final _fichiers = <String, PieceEnvoi>{};
 
   @override
   void dispose() {
@@ -28,7 +29,7 @@ class _PageDsfState extends State<PageDsf> {
     super.dispose();
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final manquants = <String>[
       if (_niu.text.trim().isEmpty) 'NIU',
       if (_destination.isEmpty) 'DSF pour impôt ou pour la banque',
@@ -40,22 +41,34 @@ class _PageDsfState extends State<PageDsf> {
       return;
     }
 
-    final pieces = [
-      for (final e in _fichiers.entries)
-        Piece(libelle: e.key, fichier: e.value),
-    ];
-    PorteeApp.of(context).envoyerDemande(
-      serviceId: 'dsf',
-      serviceLibelle: 'DSF — Déclaration statistique et fiscale',
-      resume: 'NIU ${_niu.text} — $_destination — ${_entreprise.text}',
-      pieces: pieces,
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('DSF transmise (${pieces.length} pièce(s) jointe(s)).'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
+    final pieces = _fichiers.values.toList();
+    // Capturés avant l'attente : après un `await`, le contexte peut
+    // ne plus être monté.
+    final etat = PorteeApp.of(context);
+    final messager = ScaffoldMessenger.of(context);
+    final navigateur = Navigator.of(context);
+    setState(() {
+      _erreur = '';
+      _envoi = true;
+    });
+    try {
+      await etat.envoyerDemande(
+        serviceId: 'dsf',
+        serviceLibelle: 'DSF — Déclaration statistique et fiscale',
+        resume: 'NIU ${_niu.text} — $_destination — ${_entreprise.text}',
+        pieces: pieces,
+      );
+      messager.showSnackBar(
+        SnackBar(
+          content: Text('DSF transmise (${pieces.length} pièce(s) jointe(s)).'),
+        ),
+      );
+      navigateur.pushNamedAndRemoveUntil('/profil', (r) => false);
+    } catch (e) {
+      if (mounted) setState(() => _erreur = messageErreur(e));
+    } finally {
+      if (mounted) setState(() => _envoi = false);
+    }
   }
 
   @override
@@ -115,7 +128,7 @@ class _PageDsfState extends State<PageDsf> {
               for (final doc in section.documents) ...[
                 Televersement(
                   libelle: doc,
-                  fichier: _fichiers[doc],
+                  fichier: _fichiers[doc]?.nomFichier,
                   onChoisi: (n) => setState(() => _fichiers[doc] = n),
                 ),
                 const SizedBox(height: 10),
@@ -131,7 +144,7 @@ class _PageDsfState extends State<PageDsf> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoyer(onTap: _envoyer, enCours: _envoi),
             ],
           ),
         ),

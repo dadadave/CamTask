@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import 'illustrations.dart';
@@ -265,13 +266,24 @@ class Televersement extends StatelessWidget {
   });
 
   final String libelle;
+
+  /// Nom du document déjà choisi, pour l'affichage.
   final String? fichier;
-  final ValueChanged<String> onChoisi;
+
+  /// Reçoit le document lui-même, contenu compris : c'est lui qui part vers
+  /// le serveur.
+  final ValueChanged<PieceEnvoi> onChoisi;
 
   Future<void> _choisir() async {
-    final res = await FilePicker.platform.pickFiles(withData: false);
+    // `withData: true` : sans le contenu, il n'y aurait rien à téléverser.
+    final res = await FilePicker.platform.pickFiles(withData: true);
     if (res == null || res.files.isEmpty) return;
-    onChoisi(res.files.first.name);
+    final f = res.files.first;
+    final octets = f.bytes;
+    if (octets == null) return;
+    onChoisi(
+      PieceEnvoi(libelle: libelle, nomFichier: f.name, octets: octets),
+    );
   }
 
   @override
@@ -457,6 +469,7 @@ class BoutonEnvoyer extends StatelessWidget {
     this.libelle = 'Envoyer',
     this.bloc = false,
     this.icone,
+    this.enCours = false,
   });
 
   final VoidCallback onTap;
@@ -464,19 +477,23 @@ class BoutonEnvoyer extends StatelessWidget {
   final bool bloc;
   final IconData? icone;
 
+  /// Verrouille le bouton et affiche un témoin d'activité le temps de
+  /// l'envoi, pour qu'un double appui ne crée pas deux demandes.
+  final bool enCours;
+
   @override
   Widget build(BuildContext context) {
     final bouton = DecoratedBox(
       decoration: BoxDecoration(
         gradient: Degrades.orange,
         borderRadius: Rayons.brPilule,
-        boxShadow: ombreOrange,
+        boxShadow: enCours ? null : ombreOrange,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: Rayons.brPilule,
-          onTap: onTap,
+          onTap: enCours ? null : onTap,
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: Espaces.xxl,
@@ -486,8 +503,19 @@ class BoutonEnvoyer extends StatelessWidget {
               mainAxisSize: bloc ? MainAxisSize.max : MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                if (enCours) ...[
+                  const SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: Espaces.md),
+                ],
                 Text(
-                  libelle,
+                  enCours ? 'Envoi…' : libelle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,

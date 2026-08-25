@@ -141,7 +141,33 @@ alter table public.pieces   enable row level security;
 alter table public.messages enable row level security;
 
 -- Personne ne peut se promouvoir agent depuis l'application.
-revoke update (est_agent) on public.profiles from authenticated;
+--
+-- Attention : un `revoke update (est_agent) … from authenticated` ne suffit
+-- PAS. Postgres conserve le droit dès lors qu'un UPDATE a été accordé sur la
+-- table entière — ce que Supabase fait par défaut — et la révocation par
+-- colonne reste sans effet. Il faut donc figer la colonne par un déclencheur.
+create or replace function public.figer_habilitation()
+returns trigger
+language plpgsql
+-- Volontairement SECURITY INVOKER : sous SECURITY DEFINER, `current_user`
+-- vaudrait le propriétaire de la fonction et non l'appelant, si bien que le
+-- test ci-dessous ne verrait jamais passer un utilisateur de l'application.
+set search_path = public
+as $$
+begin
+  -- Les rôles applicatifs ne touchent jamais à l'habilitation ; le tableau de
+  -- bord (postgres / service_role), lui, doit pouvoir la régler.
+  if current_user in ('authenticated', 'anon') then
+    new.est_agent := old.est_agent;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_figer_habilitation on public.profiles;
+create trigger profiles_figer_habilitation
+  before update on public.profiles
+  for each row execute function public.figer_habilitation();
 
 -- Profils ---------------------------------------------------------------------
 drop policy if exists "profil lisible par son propriétaire ou un agent" on public.profiles;

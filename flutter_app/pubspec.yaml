@@ -11,7 +11,9 @@ dependencies:
     sdk: flutter
   # Téléversement des pièces (CNI, bulletins, factures…)
   file_picker: ^8.1.2
-  # Persistance locale du compte, des demandes et de la messagerie
+  # Compte, demandes, pièces et messagerie
+  supabase_flutter: ^2.8.0
+  # Ne sert plus qu'à retenir le mode d'affichage clair/sombre
   shared_preferences: ^2.3.2
 
 dev_dependencies:

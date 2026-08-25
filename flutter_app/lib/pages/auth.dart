@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
 import '../models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -30,7 +31,8 @@ class _PageAuthState extends State<PageAuth> {
   bool _inscription = false;
   Role _role = Role.utilisateur;
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  bool _envoi = false;
+  final _fichiers = <String, PieceEnvoi>{};
 
   final _nom = TextEditingController();
   final _prenom = TextEditingController();
@@ -50,32 +52,21 @@ class _PageAuthState extends State<PageAuth> {
   List<String> get _piecesRequises =>
       _role == Role.utilisateur ? _piecesUtilisateur : _piecesEmploye;
 
-  List<Piece> get _pieces => [
-        for (final e in _fichiers.entries)
-          Piece(libelle: e.key, fichier: e.value),
-      ];
+  List<PieceEnvoi> get _pieces => _fichiers.values.toList();
 
-  void _connexion() {
+  Future<void> _connexion() async {
     if (_email.text.trim().isEmpty || _motDePasse.text.trim().isEmpty) {
       setState(() => _erreur = 'Renseignez votre email et votre mot de passe.');
       return;
     }
-    PorteeApp.of(context).seConnecter(
-      Compte(
-        role: Role.utilisateur,
-        nom: _nom.text.isNotEmpty ? _nom.text : _email.text.split('@').first,
-        prenom: _prenom.text,
-        email: _email.text,
-        telephone: _telephone.text,
-        niu: _niu.text,
-        pieces: const [],
-        creeLe: AppState.dateDuJour(),
-      ),
+    final etat = PorteeApp.of(context);
+    await _soumettre(
+      () => etat.connexion(_email.text.trim(), _motDePasse.text),
+      'Bienvenue sur CAM-TAXE.',
     );
-    _terminer('Bienvenue sur CAM-TAXE.');
   }
 
-  void _inscrire() {
+  Future<void> _inscrire() async {
     final manquants = <String>[];
     if (_role == Role.utilisateur) {
       if (_nom.text.trim().isEmpty) manquants.add('Nom');
@@ -90,9 +81,9 @@ class _PageAuthState extends State<PageAuth> {
           ? "Numéro d'identifiant unique"
           : 'Numéro de contribuable');
     }
-    if (_role == Role.utilisateur && _motDePasse.text.trim().isEmpty) {
-      manquants.add('Mot de passe');
-    }
+    // L'authentification exige un mot de passe pour tout compte, quel que
+    // soit le profil déclaré.
+    if (_motDePasse.text.trim().isEmpty) manquants.add('Mot de passe');
     manquants.addAll(_piecesRequises.where((p) => !_fichiers.containsKey(p)));
 
     if (manquants.isNotEmpty) {
@@ -100,25 +91,44 @@ class _PageAuthState extends State<PageAuth> {
       return;
     }
 
-    PorteeApp.of(context).seConnecter(
-      Compte(
-        role: _role,
-        nom: _nom.text,
-        prenom: _prenom.text,
-        email: _email.text,
-        telephone: _telephone.text,
-        niu: _niu.text,
-        pieces: _pieces,
-        creeLe: AppState.dateDuJour(),
+    final etat = PorteeApp.of(context);
+    await _soumettre(
+      () => etat.inscription(
+        InscriptionEntree(
+          role: _role,
+          nom: _nom.text,
+          prenom: _prenom.text,
+          email: _email.text.trim(),
+          telephone: _telephone.text,
+          niu: _niu.text,
+          motDePasse: _motDePasse.text,
+          pieces: _pieces,
+        ),
       ),
+      'Compte créé. Vous pouvez maintenant utiliser nos services.',
     );
-    _terminer('Compte créé. Vous pouvez maintenant utiliser nos services.');
   }
 
-  void _terminer(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
-    Navigator.of(context).pushNamedAndRemoveUntil('/accueil', (r) => false);
+  /// Exécute [action] en affichant l'attente, puis annonce [message] et
+  /// revient à l'accueil. Une erreur du serveur s'affiche sous le formulaire.
+  Future<void> _soumettre(Future<void> Function() action, String message) async {
+    // Capturés avant l'attente : après un `await`, le contexte peut ne plus
+    // être monté.
+    final messager = ScaffoldMessenger.of(context);
+    final navigateur = Navigator.of(context);
+    setState(() {
+      _erreur = '';
+      _envoi = true;
+    });
+    try {
+      await action();
+      messager.showSnackBar(SnackBar(content: Text(message)));
+      navigateur.pushNamedAndRemoveUntil('/accueil', (r) => false);
+    } catch (e) {
+      if (mounted) setState(() => _erreur = messageErreur(e));
+    } finally {
+      if (mounted) setState(() => _envoi = false);
+    }
   }
 
   @override
@@ -181,6 +191,7 @@ class _PageAuthState extends State<PageAuth> {
                   const SizedBox(height: 26),
                   BoutonEnvoyer(
                     bloc: true,
+                    enCours: _envoi,
                     libelle: _inscription ? 'Créer mon compte' : 'Se connecter',
                     icone: Icons.arrow_forward_rounded,
                     onTap: _inscription ? _inscrire : _connexion,
@@ -270,22 +281,20 @@ class _PageAuthState extends State<PageAuth> {
           controleur: _niu,
           majuscules: false,
         ),
-        if (_role == Role.utilisateur) ...[
-          const SizedBox(height: 18),
-          Champ(
-            libelle: 'mot de passe',
-            controleur: _motDePasse,
-            masque: true,
-            majuscules: false,
-          ),
-        ],
+        const SizedBox(height: 18),
+        Champ(
+          libelle: 'mot de passe',
+          controleur: _motDePasse,
+          masque: true,
+          majuscules: false,
+        ),
         const SizedBox(height: 20),
         const LibelleSection(texte: 'Pièces à fournir'),
         const SizedBox(height: 10),
         for (final p in _piecesRequises) ...[
           Televersement(
             libelle: p,
-            fichier: _fichiers[p],
+            fichier: _fichiers[p]?.nomFichier,
             onChoisi: (n) => setState(() => _fichiers[p] = n),
           ),
           const SizedBox(height: 10),

@@ -7,19 +7,33 @@ Cameroun, construite d'après les maquettes fournies.
 
 ## Démarrer
 
+L'application a besoin des clés du projet Supabase, fournies à la
+compilation. Sans elles, elle affiche un écran « Application non configurée »
+qui rappelle quoi renseigner.
+
 ```bash
 flutter pub get
-flutter run                      # sur un appareil ou un émulateur connecté
 
-flutter build apk --release      # Android
-flutter build ipa --release      # iOS (nécessite macOS et Xcode)
+flutter run \
+  --dart-define=SUPABASE_URL=https://votre-projet.supabase.co \
+  --dart-define=SUPABASE_ANON_KEY=votre-cle-anon
+
+flutter build apk --release --dart-define=SUPABASE_URL=… --dart-define=SUPABASE_ANON_KEY=…
+flutter build ipa --release --dart-define=SUPABASE_URL=… --dart-define=SUPABASE_ANON_KEY=…
 ```
 
-Vérifications :
+Les valeurs se trouvent dans *Settings → API* du projet Supabase. La clé
+`anon` est publique par nature : ce sont les policies RLS de
+`../supabase/schema.sql` qui protègent les données, pas le secret de la clé.
+Ne mettez **jamais** la clé `service_role` dans l'application : elle contourne
+toutes les policies.
+
+Vérifications — aucune clé n'est nécessaire, les tests utilisent une source de
+données en mémoire :
 
 ```bash
-flutter analyze                  # aucun problème attendu
-flutter test                     # 5 tests
+flutter analyze
+flutter test
 ```
 
 ## Les 7 services
@@ -47,10 +61,16 @@ Un compte est obligatoire pour accéder aux services (`RequiertCompte` dans
 - **Personne employée** — CNI, téléphone, plan de localisation, numéro de
   contribuable, adresse email et CNI d'un garant qui se porte caution.
 
+Le mot de passe est désormais demandé aux deux profils : l'authentification en
+exige un pour chaque compte. Cocher « Personne employée » ne donne aucun droit
+particulier sur les dossiers des clients — cette habilitation se règle depuis
+le tableau de bord Supabase.
+
 ## Structure
 
 ```
 lib/
+  api/           accès aux données : l'interface `Backend` et son implémentation
   data/          contenus éditoriaux (services, conseil fiscal, audit, DSF)
   models.dart    compte, demande, pièce, message
   state/         état de l'application (ChangeNotifier + InheritedNotifier)
@@ -59,12 +79,45 @@ lib/
   theme.dart     charte graphique
 ```
 
-## État des données
+## Le back-end
 
-Le compte, les demandes et la messagerie sont conservés sur l'appareil via
-`shared_preferences`. Les téléversements (`file_picker`) enregistrent le nom du
-fichier choisi ; l'envoi réel des documents, l'API, le paiement de caution et le
-chat temps réel restent à brancher.
+Le compte, les demandes, les pièces jointes et la messagerie vivent dans
+**Supabase**, comme pour l'application React : les deux clients partagent le
+même schéma, décrit dans [`../supabase/schema.sql`](../supabase/schema.sql) et
+documenté dans le [README de la racine](../README.md).
+
+Seul le mode d'affichage (clair / sombre) reste sur l'appareil, via
+`shared_preferences`.
+
+### Passer à notre propre API
+
+L'application ne connaît pas Supabase. Elle ne parle qu'à l'interface
+`Backend` de [`lib/api/backend.dart`](lib/api/backend.dart) — sessions,
+demandes, pièces, messages, temps réel — dont `lib/api/supabase_backend.dart`
+est une implémentation parmi d'autres. C'est le pendant exact de
+`src/api/types.ts` côté React.
+
+Le jour où notre back-end prend le relais :
+
+1. écrire `lib/api/backend_rest.dart` qui implémente `Backend` ;
+2. changer la seule ligne d'affectation de `lib/api/api.dart`.
+
+Aucun écran ni `AppState` à retoucher.
+
+### Tests
+
+C'est aussi ce qui rend l'application testable : `test/faux_backend.dart`
+fournit une source de données en mémoire, installée par `utiliserBackend()`.
+Les tests tournent donc sans réseau, sans projet Supabase et sans clés — et ne
+bougeront pas d'une ligne le jour du changement de back-end.
+
+### Reste à faire
+
+- **Mode hors-ligne** : l'ancien stockage local a disparu, l'application exige
+  maintenant une connexion. Un cache par-dessus l'interface `Backend` le
+  rétablirait — utile vu la qualité du réseau.
+- **Paiements** : la caution de l'audit n'est pas encaissée. Un encaissement
+  mobile money demande un secret côté serveur, donc une Edge Function.
 
 ## Charte
 

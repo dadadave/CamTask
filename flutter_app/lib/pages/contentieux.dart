@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models.dart';
+import '../api/api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
@@ -24,7 +24,8 @@ class _PageContentieuxState extends State<PageContentieux> {
   final _niu = TextEditingController();
   final _prejudice = TextEditingController();
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  bool _envoi = false;
+  final _fichiers = <String, PieceEnvoi>{};
 
   @override
   void dispose() {
@@ -33,28 +34,40 @@ class _PageContentieuxState extends State<PageContentieux> {
     super.dispose();
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     if (_prejudice.text.trim().isEmpty) {
       setState(() => _erreur = 'Décrivez la nature du préjudice subi.');
       return;
     }
 
-    PorteeApp.of(context).envoyerDemande(
-      serviceId: 'contentieux',
-      serviceLibelle: 'Contentieux fiscal',
-      resume: '${_niu.text.trim().isEmpty ? '' : 'NIU ${_niu.text} — '}'
-          'Préjudice : ${_prejudice.text.trim()}',
-      pieces: [
-        for (final e in _fichiers.entries)
-          Piece(libelle: e.key, fichier: e.value),
-      ],
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Votre contentieux a été transmis à un conseiller.'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
+    // Capturés avant l'attente : après un `await`, le contexte peut
+    // ne plus être monté.
+    final etat = PorteeApp.of(context);
+    final messager = ScaffoldMessenger.of(context);
+    final navigateur = Navigator.of(context);
+    setState(() {
+      _erreur = '';
+      _envoi = true;
+    });
+    try {
+      await etat.envoyerDemande(
+        serviceId: 'contentieux',
+        serviceLibelle: 'Contentieux fiscal',
+        resume: '${_niu.text.trim().isEmpty ? '' : 'NIU ${_niu.text} — '}'
+            'Préjudice : ${_prejudice.text.trim()}',
+        pieces: _fichiers.values.toList(),
+      );
+      messager.showSnackBar(
+        const SnackBar(
+          content: Text('Votre contentieux a été transmis à un conseiller.'),
+        ),
+      );
+      navigateur.pushNamedAndRemoveUntil('/profil', (r) => false);
+    } catch (e) {
+      if (mounted) setState(() => _erreur = messageErreur(e));
+    } finally {
+      if (mounted) setState(() => _envoi = false);
+    }
   }
 
   @override
@@ -102,7 +115,7 @@ class _PageContentieuxState extends State<PageContentieux> {
               for (final p in _pieces) ...[
                 Televersement(
                   libelle: p,
-                  fichier: _fichiers[p],
+                  fichier: _fichiers[p]?.nomFichier,
                   onChoisi: (n) => setState(() => _fichiers[p] = n),
                 ),
                 const SizedBox(height: 10),
@@ -112,7 +125,7 @@ class _PageContentieuxState extends State<PageContentieux> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoyer(onTap: _envoyer, enCours: _envoi),
             ],
           ),
         ),

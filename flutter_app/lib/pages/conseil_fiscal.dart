@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/conseil.dart';
+import '../api/api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
@@ -18,6 +19,7 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
   final _choix = <String>{};
   bool _autreOuvert = false;
   String _erreur = '';
+  bool _envoi = false;
   final _message = TextEditingController();
 
   @override
@@ -32,7 +34,7 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
             if (_choix.contains(s.id)) s.titre,
       ];
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final titres = _titresChoisis();
     final message = _message.text.trim();
     if (titres.isEmpty && message.isEmpty) {
@@ -41,22 +43,36 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
       return;
     }
 
-    PorteeApp.of(context).envoyerDemande(
-      serviceId: 'conseil',
-      serviceLibelle: 'Besoin de conseil fiscale',
-      resume: [
-        if (titres.isNotEmpty) 'Préoccupations : ${titres.join(' • ')}',
-        if (message.isNotEmpty) 'Autre préoccupation : $message',
-      ].join('\n'),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Votre demande de conseil a été envoyée. '
-            'Un conseiller vous répond sous peu.'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
+    // Capturés avant l'attente : après un `await`, le contexte peut
+    // ne plus être monté.
+    final etat = PorteeApp.of(context);
+    final messager = ScaffoldMessenger.of(context);
+    final navigateur = Navigator.of(context);
+    setState(() {
+      _erreur = '';
+      _envoi = true;
+    });
+    try {
+      await etat.envoyerDemande(
+        serviceId: 'conseil',
+        serviceLibelle: 'Besoin de conseil fiscale',
+        resume: [
+          if (titres.isNotEmpty) 'Préoccupations : ${titres.join(' • ')}',
+          if (message.isNotEmpty) 'Autre préoccupation : $message',
+        ].join('\n'),
+      );
+      messager.showSnackBar(
+        const SnackBar(
+          content: Text('Votre demande de conseil a été envoyée. '
+              'Un conseiller vous répond sous peu.'),
+        ),
+      );
+      navigateur.pushNamedAndRemoveUntil('/profil', (r) => false);
+    } catch (e) {
+      if (mounted) setState(() => _erreur = messageErreur(e));
+    } finally {
+      if (mounted) setState(() => _envoi = false);
+    }
   }
 
   @override
@@ -82,7 +98,7 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
         Padding(
           padding: const EdgeInsets.only(bottom: 18),
           child: Center(
-            child: BoutonEnvoyer(onTap: _envoyer),
+            child: BoutonEnvoyer(onTap: _envoyer, enCours: _envoi),
           ),
         ),
         Encadre(
