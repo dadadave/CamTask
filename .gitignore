@@ -7,3 +7,7 @@ dist-ssr
 *.log
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+
+# Variables d'environnement locales
+.env
+.env.local

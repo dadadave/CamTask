@@ -10,6 +10,7 @@ import {
   Upload,
   useUploads,
 } from '../components/ui'
+import { messageErreur } from '../api'
 import { useApp } from '../store/AppContext'
 
 const PIECES = [
@@ -25,7 +26,9 @@ export function Darp() {
   const [niu, setNiu] = useState('')
   const [erreur, setErreur] = useState('')
 
-  function envoyer() {
+  const [envoi, setEnvoi] = useState(false)
+
+  async function envoyer() {
     const manquants = [
       !niu.trim() && 'NIU ou numéro de contribuable',
       ...PIECES.filter((p) => !fichiers[p]),
@@ -36,14 +39,22 @@ export function Darp() {
       return
     }
 
-    envoyerDemande({
-      serviceId: 'darp',
-      serviceLabel: 'DARP/IRPP',
-      resume: `Déclaration annuelle des revenus des particuliers — NIU ${niu}`,
-      pieces,
-    })
-    afficherToast('DARP/IRPP transmise à nos services.')
-    navigate('/profil')
+    setErreur('')
+    setEnvoi(true)
+    try {
+      await envoyerDemande({
+        serviceId: 'darp',
+        serviceLabel: 'DARP/IRPP',
+        resume: `Déclaration annuelle des revenus des particuliers — NIU ${niu}`,
+        pieces,
+      })
+      afficherToast('DARP/IRPP transmise à nos services.')
+      navigate('/profil')
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (
@@ -67,7 +78,11 @@ export function Darp() {
           ))}
 
           {erreur && <p className="field__error">{erreur}</p>}
-          <BoutonEnvoyer onClick={envoyer} />
+          <BoutonEnvoyer
+            onClick={envoyer}
+            libelle={envoi ? 'Envoi…' : 'Envoyer'}
+            disabled={envoi}
+          />
         </div>
 
         <DiscuterAgent sujet="DARP/IRPP" />

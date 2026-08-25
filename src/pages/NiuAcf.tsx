@@ -12,6 +12,7 @@ import {
   Upload,
   useUploads,
 } from '../components/ui'
+import { messageErreur } from '../api'
 import { useApp } from '../store/AppContext'
 
 /** L'utilisateur choisit le NIU, l'ACF, ou les deux. */
@@ -66,7 +67,9 @@ export function NiuAcf() {
     setErreur('')
   }
 
-  function envoyer() {
+  const [envoi, setEnvoi] = useState(false)
+
+  async function envoyer() {
     if (demarches.length === 0) {
       setErreur('Choisissez le NIU, l’ACF, ou les deux.')
       return
@@ -96,14 +99,22 @@ export function NiuAcf() {
       .filter(Boolean)
       .join('\n')
 
-    envoyerDemande({
-      serviceId: 'niu-acf',
-      serviceLabel: `Acquérir son ${demarches.join(' / ')}`,
-      resume,
-      pieces,
-    })
-    afficherToast('Demande envoyée. Un agent traite votre dossier.')
-    navigate('/profil')
+    setErreur('')
+    setEnvoi(true)
+    try {
+      await envoyerDemande({
+        serviceId: 'niu-acf',
+        serviceLabel: `Acquérir son ${demarches.join(' / ')}`,
+        resume,
+        pieces,
+      })
+      afficherToast('Demande envoyée. Un agent traite votre dossier.')
+      navigate('/profil')
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (
@@ -173,7 +184,11 @@ export function NiuAcf() {
 
         <div className="form" style={{ marginTop: 16 }}>
           {erreur && <p className="field__error">{erreur}</p>}
-          <BoutonEnvoyer onClick={envoyer} />
+          <BoutonEnvoyer
+            onClick={envoyer}
+            libelle={envoi ? 'Envoi…' : 'Envoyer'}
+            disabled={envoi}
+          />
         </div>
 
         <DiscuterAgent sujet="Acquérir son NIU / ACF" />

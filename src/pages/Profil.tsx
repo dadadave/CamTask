@@ -95,8 +95,7 @@ export function Profil() {
           <button
             className="btn btn--ghost btn--block"
             onClick={() => {
-              seDeconnecter()
-              navigate('/auth')
+              void seDeconnecter().then(() => navigate('/auth'))
             }}
           >
             Se déconnecter

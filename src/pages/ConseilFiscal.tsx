@@ -9,6 +9,7 @@ import {
   CONSEIL_INTRO,
   QUESTIONS_CONSEIL,
 } from '../data/conseil'
+import { messageErreur } from '../api'
 import { useApp } from '../store/AppContext'
 
 export function ConseilFiscal() {
@@ -32,24 +33,34 @@ export function ConseilFiscal() {
     )
   }
 
-  function envoyer() {
+  const [envoi, setEnvoi] = useState(false)
+
+  async function envoyer() {
     const titres = libellesChoisis()
     if (titres.length === 0 && !message.trim()) {
       setErreur('Choisissez au moins une préoccupation ou décrivez la vôtre.')
       return
     }
-    envoyerDemande({
-      serviceId: 'conseil',
-      serviceLabel: 'Besoin de conseil fiscale',
-      resume: [
-        titres.length ? `Préoccupations : ${titres.join(' • ')}` : '',
-        message.trim() ? `Autre préoccupation : ${message.trim()}` : '',
-      ]
-        .filter(Boolean)
-        .join('\n'),
-    })
-    afficherToast('Votre demande de conseil a été envoyée. Un conseiller vous répond sous peu.')
-    navigate('/profil')
+    setErreur('')
+    setEnvoi(true)
+    try {
+      await envoyerDemande({
+        serviceId: 'conseil',
+        serviceLabel: 'Besoin de conseil fiscale',
+        resume: [
+          titres.length ? `Préoccupations : ${titres.join(' • ')}` : '',
+          message.trim() ? `Autre préoccupation : ${message.trim()}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      })
+      afficherToast('Votre demande de conseil a été envoyée. Un conseiller vous répond sous peu.')
+      navigate('/profil')
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (
@@ -133,7 +144,11 @@ export function ConseilFiscal() {
         )}
 
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
-          <BoutonEnvoyer onClick={envoyer} />
+          <BoutonEnvoyer
+            onClick={envoyer}
+            libelle={envoi ? 'Envoi…' : 'Envoyer'}
+            disabled={envoi}
+          />
         </div>
 
         <div className="notice">

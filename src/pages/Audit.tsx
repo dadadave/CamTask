@@ -18,6 +18,7 @@ import {
   SECTIONS_AUDIT,
   TYPES_AUDIT,
 } from '../data/audit'
+import { messageErreur } from '../api'
 import { useApp } from '../store/AppContext'
 
 const OPERATEURS = ['MTN Mobile Money', 'Orange Money', 'Virement bancaire'] as const
@@ -49,7 +50,9 @@ export function Audit() {
     afficherToast(`Caution enregistrée via ${operateur}.`)
   }
 
-  function envoyer() {
+  const [envoi, setEnvoi] = useState(false)
+
+  async function envoyer() {
     const manquants = [
       !structure.trim() && 'Nom de la structure',
       !type && "Type d'audit",
@@ -62,14 +65,22 @@ export function Audit() {
       return
     }
 
-    envoyerDemande({
-      serviceId: 'audit',
-      serviceLabel: 'Faire un audit',
-      resume: `${type} — ${structure} — NIU ${niu} — caution réglée (${operateur})`,
-      pieces,
-    })
-    afficherToast(`Demande d'audit envoyée (${pieces.length} document(s)).`)
-    navigate('/profil')
+    setErreur('')
+    setEnvoi(true)
+    try {
+      await envoyerDemande({
+        serviceId: 'audit',
+        serviceLabel: 'Faire un audit',
+        resume: `${type} — ${structure} — NIU ${niu} — caution réglée (${operateur})`,
+        pieces,
+      })
+      afficherToast(`Demande d'audit envoyée (${pieces.length} document(s)).`)
+      navigate('/profil')
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (
@@ -143,7 +154,11 @@ export function Audit() {
 
         <div className="form">
           {erreur && <p className="field__error">{erreur}</p>}
-          <BoutonEnvoyer onClick={envoyer} />
+          <BoutonEnvoyer
+            onClick={envoyer}
+            libelle={envoi ? 'Envoi…' : 'Envoyer'}
+            disabled={envoi}
+          />
         </div>
 
         <DiscuterAgent sujet="Faire un audit" />
