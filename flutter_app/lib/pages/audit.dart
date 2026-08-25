@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/audit.dart';
-import '../models.dart';
+import '../api/api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
@@ -26,7 +26,8 @@ class _PageAuditState extends State<PageAudit> {
   final _telephone = TextEditingController();
   String? _type;
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  bool _envoi = false;
+  final _fichiers = <String, PieceEnvoi>{};
 
   // Paiement de la caution
   bool _paiementOuvert = false;
@@ -57,7 +58,7 @@ class _PageAuditState extends State<PageAudit> {
     );
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final manquants = <String>[
       if (_structure.text.trim().isEmpty) 'Nom de la structure',
       if (_type == null) "Type d'audit",
@@ -69,24 +70,36 @@ class _PageAuditState extends State<PageAudit> {
       return;
     }
 
-    final pieces = [
-      for (final e in _fichiers.entries)
-        Piece(libelle: e.key, fichier: e.value),
-    ];
-    PorteeApp.of(context).envoyerDemande(
-      serviceId: 'audit',
-      serviceLibelle: 'Faire un audit',
-      resume: '$_type — ${_structure.text} — NIU ${_niu.text} — '
-          'caution réglée ($_operateur)',
-      pieces: pieces,
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Demande d'audit envoyée "
-            '(${pieces.length} document(s)).'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
+    final pieces = _fichiers.values.toList();
+    // Capturés avant l'attente : après un `await`, le contexte peut
+    // ne plus être monté.
+    final etat = PorteeApp.of(context);
+    final messager = ScaffoldMessenger.of(context);
+    final navigateur = Navigator.of(context);
+    setState(() {
+      _erreur = '';
+      _envoi = true;
+    });
+    try {
+      await etat.envoyerDemande(
+        serviceId: 'audit',
+        serviceLibelle: 'Faire un audit',
+        resume: '$_type — ${_structure.text} — NIU ${_niu.text} — '
+            'caution réglée ($_operateur)',
+        pieces: pieces,
+      );
+      messager.showSnackBar(
+        SnackBar(
+          content: Text("Demande d'audit envoyée "
+              '(${pieces.length} document(s)).'),
+        ),
+      );
+      navigateur.pushNamedAndRemoveUntil('/profil', (r) => false);
+    } catch (e) {
+      if (mounted) setState(() => _erreur = messageErreur(e));
+    } finally {
+      if (mounted) setState(() => _envoi = false);
+    }
   }
 
   @override
@@ -196,7 +209,7 @@ class _PageAuditState extends State<PageAudit> {
               for (final doc in section.documents) ...[
                 Televersement(
                   libelle: doc,
-                  fichier: _fichiers[doc],
+                  fichier: _fichiers[doc]?.nomFichier,
                   onChoisi: (n) => setState(() => _fichiers[doc] = n),
                 ),
                 const SizedBox(height: 10),
@@ -212,7 +225,7 @@ class _PageAuditState extends State<PageAudit> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoyer(onTap: _envoyer, enCours: _envoi),
             ],
           ),
         ),

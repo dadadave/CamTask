@@ -1,16 +1,18 @@
-import 'dart:convert';
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../api/api.dart';
 import '../models.dart';
 
-const _cle = 'mon-comptable:v1';
+/// Le mode d'affichage reste une préférence de l'appareil : il n'a rien à
+/// faire sur le serveur.
+const _cleMode = 'mon-comptable:mode';
 
 /// Préférence d'affichage de l'utilisateur.
 enum ModeTheme { systeme, clair, sombre }
 
+/// Accueil de la messagerie. Affiché tant que la conversation est vide : ce
+/// n'est pas un message stocké, seulement le premier mot du conseiller.
 const _messageAccueil = Message(
   id: 'bienvenue',
   auteur: Auteur.agent,
@@ -22,18 +24,29 @@ const _messageAccueil = Message(
 );
 
 /// État de l'application : compte, demandes et messagerie.
-/// Persisté dans les préférences locales de l'appareil.
+///
+/// Les données viennent du [backend] ; seul le mode d'affichage est conservé
+/// sur l'appareil.
 class AppState extends ChangeNotifier {
   Compte? _compte;
   ModeTheme _mode = ModeTheme.systeme;
   List<Demande> _demandes = [];
-  List<Message> _messages = [_messageAccueil];
+  List<Message> _messages = const [];
   SharedPreferences? _prefs;
+  bool _pret = false;
+  void Function()? _annulerEcoute;
 
   Compte? get compte => _compte;
   List<Demande> get demandes => List.unmodifiable(_demandes);
-  List<Message> get messages => List.unmodifiable(_messages);
+
+  /// La conversation, ou le mot d'accueil tant qu'elle est vide.
+  List<Message> get messages =>
+      List.unmodifiable(_messages.isEmpty ? [_messageAccueil] : _messages);
+
   bool get connecte => _compte != null;
+
+  /// Faux tant que la session enregistrée n'a pas été relue au démarrage.
+  bool get pret => _pret;
 
   /// Mode d'affichage choisi : clair, sombre ou celui du système.
   ModeTheme get mode => _mode;
@@ -48,55 +61,7 @@ class AppState extends ChangeNotifier {
     if (m == _mode) return;
     _mode = m;
     notifyListeners();
-    _sauver();
-  }
-
-  Future<void> charger() async {
-    _prefs = await SharedPreferences.getInstance();
-    final brut = _prefs?.getString(_cle);
-    if (brut == null) return;
-    try {
-      final j = jsonDecode(brut) as Map<String, dynamic>;
-      _mode = ModeTheme.values.firstWhere(
-        (m) => m.name == j['mode'],
-        orElse: () => ModeTheme.systeme,
-      );
-      final c = j['compte'];
-      _compte = c == null ? null : Compte.depuisJson(c as Map<String, dynamic>);
-      _demandes = ((j['demandes'] as List<dynamic>?) ?? const [])
-          .map((e) => Demande.depuisJson(e as Map<String, dynamic>))
-          .toList();
-      final msgs = ((j['messages'] as List<dynamic>?) ?? const [])
-          .map((e) => Message.depuisJson(e as Map<String, dynamic>))
-          .toList();
-      if (msgs.isNotEmpty) _messages = msgs;
-      notifyListeners();
-    } on FormatException {
-      // Données illisibles : on repart d'un état vierge.
-    }
-  }
-
-  Future<void> _sauver() async {
-    await _prefs?.setString(
-      _cle,
-      jsonEncode({
-        'mode': _mode.name,
-        'compte': _compte?.versJson(),
-        'demandes': _demandes.map((d) => d.versJson()).toList(),
-        'messages': _messages.map((m) => m.versJson()).toList(),
-      }),
-    );
-  }
-
-  static String _identifiant() {
-    final r = Random().nextInt(1 << 32).toRadixString(16);
-    return '${DateTime.now().millisecondsSinceEpoch}-$r';
-  }
-
-  static String _heure() {
-    final n = DateTime.now();
-    return '${n.hour.toString().padLeft(2, '0')}:'
-        '${n.minute.toString().padLeft(2, '0')}';
+    _prefs?.setString(_cleMode, m.name);
   }
 
   static String dateDuJour() {
@@ -105,68 +70,102 @@ class AppState extends ChangeNotifier {
         '${n.month.toString().padLeft(2, '0')}/${n.year}';
   }
 
-  void seConnecter(Compte compte) {
+  /// Démarre le backend et reprend la session si l'appareil en a une.
+  Future<void> charger() async {
+    _prefs = await SharedPreferences.getInstance();
+    final nomMode = _prefs?.getString(_cleMode);
+    if (nomMode != null) {
+      _mode = ModeTheme.values.firstWhere(
+        (m) => m.name == nomMode,
+        orElse: () => ModeTheme.systeme,
+      );
+    }
+
+    try {
+      await backend.demarrer();
+      final compte = await backend.sessionActuelle();
+      if (compte != null) await _charger(compte);
+    } catch (_) {
+      // Session illisible ou serveur injoignable : on démarre déconnecté.
+    } finally {
+      _pret = true;
+      notifyListeners();
+    }
+  }
+
+  /// Charge le dossier de l'utilisateur : ses demandes et sa conversation.
+  Future<void> _charger(Compte compte) async {
+    // Les deux requêtes partent ensemble ; on les attend séparément pour
+    // garder leurs types, ce qu'un `Future.wait` sur une liste hétérogène
+    // perdrait.
+    final futurDemandes = backend.listerDemandes();
+    final futurMessages = backend.listerMessages();
+    _demandes = await futurDemandes;
+    _messages = await futurMessages;
     _compte = compte;
+    _ecouterMessages();
     notifyListeners();
-    _sauver();
   }
 
-  void seDeconnecter() {
+  /// Réponses des agents, en temps réel.
+  void _ecouterMessages() {
+    _annulerEcoute?.call();
+    _annulerEcoute = backend.souscrireMessages((m) {
+      if (_messages.any((x) => x.id == m.id)) return;
+      _messages = [..._messages, m];
+      notifyListeners();
+    });
+  }
+
+  Future<void> inscription(InscriptionEntree entree) async {
+    final compte = await backend.inscription(entree);
+    await _charger(compte);
+  }
+
+  Future<void> connexion(String email, String motDePasse) async {
+    final compte = await backend.connexion(email, motDePasse);
+    await _charger(compte);
+  }
+
+  Future<void> seDeconnecter() async {
+    await backend.deconnexion();
+    _annulerEcoute?.call();
+    _annulerEcoute = null;
     _compte = null;
+    _demandes = const [];
+    _messages = const [];
     notifyListeners();
-    _sauver();
   }
 
-  Demande envoyerDemande({
+  Future<Demande> envoyerDemande({
     required String serviceId,
     required String serviceLibelle,
     required String resume,
-    List<Piece> pieces = const [],
-  }) {
-    final demande = Demande(
-      id: _identifiant(),
-      serviceId: serviceId,
-      serviceLibelle: serviceLibelle,
-      resume: resume,
-      pieces: pieces,
-      statut: 'Envoyée',
-      date: dateDuJour(),
+    List<PieceEnvoi> pieces = const [],
+  }) async {
+    final demande = await backend.creerDemande(
+      DemandeEntree(
+        serviceId: serviceId,
+        serviceLibelle: serviceLibelle,
+        resume: resume,
+        pieces: pieces,
+      ),
     );
     _demandes = [demande, ..._demandes];
     notifyListeners();
-    _sauver();
     return demande;
   }
 
-  void envoyerMessage(String texte, {String? fichier}) {
-    _messages = [
-      ..._messages,
-      Message(
-        id: _identifiant(),
-        auteur: Auteur.moi,
-        texte: texte,
-        fichier: fichier,
-        heure: _heure(),
-      ),
-    ];
+  Future<void> envoyerMessage(String texte, {PieceEnvoi? piece}) async {
+    final mien = await backend.envoyerMessage(texte, piece: piece);
+    _messages = [..._messages, mien];
     notifyListeners();
-    _sauver();
+  }
 
-    // Réponse simulée de l'agent — le back-office sera branché plus tard.
-    Future<void>.delayed(const Duration(milliseconds: 1100), () {
-      _messages = [
-        ..._messages,
-        Message(
-          id: _identifiant(),
-          auteur: Auteur.agent,
-          texte: 'Bien reçu, je consulte votre dossier et je reviens vers vous '
-              'dans quelques instants.',
-          heure: _heure(),
-        ),
-      ];
-      notifyListeners();
-      _sauver();
-    });
+  @override
+  void dispose() {
+    _annulerEcoute?.call();
+    super.dispose();
   }
 }
 

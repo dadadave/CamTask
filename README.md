@@ -162,9 +162,9 @@ Aucune page, aucun composant, aucun état à retoucher.
 - **Mode hors-ligne** : l'ancien `localStorage` a disparu, l'application exige
   maintenant une connexion. Un cache local par-dessus le `Backend` le
   rétablirait — utile vu la qualité du réseau.
-- **Application Flutter** : `flutter_app/` est toujours sur le stockage local
-  de l'appareil. Le paquet `supabase_flutter` expose la même API ; le schéma
-  ci-dessus la sert telle quelle.
+- **Application Flutter** : `flutter_app/` consomme le même schéma via
+  `supabase_flutter`, avec la même interface `Backend`. Les clés lui sont
+  passées par `--dart-define` ; voir son [README](flutter_app/README.md).
 - **Paiements** : les montants de `Déclarer` et la caution d'`Audit` ne sont
   pas encaissés. Un encaissement mobile money demande un secret côté serveur,
   donc une Edge Function.

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models.dart';
+import '../api/api.dart';
 import '../state/app_state.dart';
 import '../widgets/communs.dart';
 import '../widgets/coquille.dart';
@@ -20,7 +20,8 @@ class PageDarp extends StatefulWidget {
 class _PageDarpState extends State<PageDarp> {
   final _niu = TextEditingController();
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  bool _envoi = false;
+  final _fichiers = <String, PieceEnvoi>{};
 
   @override
   void dispose() {
@@ -28,7 +29,7 @@ class _PageDarpState extends State<PageDarp> {
     super.dispose();
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final manquants = <String>[
       if (_niu.text.trim().isEmpty) 'NIU ou numéro de contribuable',
       ..._pieces.where((p) => !_fichiers.containsKey(p)),
@@ -38,20 +39,32 @@ class _PageDarpState extends State<PageDarp> {
       return;
     }
 
-    PorteeApp.of(context).envoyerDemande(
-      serviceId: 'darp',
-      serviceLibelle: 'DARP/IRPP',
-      resume: 'Déclaration annuelle des revenus des particuliers — '
-          'NIU ${_niu.text}',
-      pieces: [
-        for (final e in _fichiers.entries)
-          Piece(libelle: e.key, fichier: e.value),
-      ],
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('DARP/IRPP transmise à nos services.')),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
+    // Capturés avant l'attente : après un `await`, le contexte peut
+    // ne plus être monté.
+    final etat = PorteeApp.of(context);
+    final messager = ScaffoldMessenger.of(context);
+    final navigateur = Navigator.of(context);
+    setState(() {
+      _erreur = '';
+      _envoi = true;
+    });
+    try {
+      await etat.envoyerDemande(
+        serviceId: 'darp',
+        serviceLibelle: 'DARP/IRPP',
+        resume: 'Déclaration annuelle des revenus des particuliers — '
+            'NIU ${_niu.text}',
+        pieces: _fichiers.values.toList(),
+      );
+      messager.showSnackBar(
+        const SnackBar(content: Text('DARP/IRPP transmise à nos services.')),
+      );
+      navigateur.pushNamedAndRemoveUntil('/profil', (r) => false);
+    } catch (e) {
+      if (mounted) setState(() => _erreur = messageErreur(e));
+    } finally {
+      if (mounted) setState(() => _envoi = false);
+    }
   }
 
   @override
@@ -76,7 +89,7 @@ class _PageDarpState extends State<PageDarp> {
               for (final p in _pieces) ...[
                 Televersement(
                   libelle: p,
-                  fichier: _fichiers[p],
+                  fichier: _fichiers[p]?.nomFichier,
                   onChoisi: (n) => setState(() => _fichiers[p] = n),
                 ),
                 const SizedBox(height: 22),
@@ -85,7 +98,7 @@ class _PageDarpState extends State<PageDarp> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoyer(onTap: _envoyer, enCours: _envoi),
             ],
           ),
         ),
