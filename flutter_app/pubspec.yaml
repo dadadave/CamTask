@@ -11,8 +11,10 @@ dependencies:
     sdk: flutter
   # Téléversement des pièces (CNI, bulletins, factures…)
   file_picker: ^8.1.2
-  # Persistance locale du compte, des demandes et de la messagerie
+  # Persistance locale des demandes et de la messagerie
   shared_preferences: ^2.3.2
+  # Authentification, base de donnees et stockage (voir supabase/schema.sql)
+  supabase_flutter: ^2.17.2
 
 dev_dependencies:
   flutter_test:

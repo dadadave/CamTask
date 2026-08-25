@@ -289,10 +289,12 @@ class PageProfil extends StatelessWidget {
               foregroundColor: Palette.orange,
               side: const BorderSide(color: Palette.orange, width: 1.4),
             ),
-            onPressed: () {
-              etat.seDeconnecter();
-              Navigator.of(context)
-                  .pushNamedAndRemoveUntil('/auth', (r) => false);
+            onPressed: () async {
+              // On attend la fin de la déconnexion : sans cela l'écran
+              // suivant s'afficherait avec une session encore ouverte.
+              final navigateur = Navigator.of(context);
+              await etat.seDeconnecter();
+              navigateur.pushNamedAndRemoveUntil('/auth', (r) => false);
             },
             icon: const Icon(Icons.logout_rounded, size: 18),
             label: const Text('Se déconnecter'),

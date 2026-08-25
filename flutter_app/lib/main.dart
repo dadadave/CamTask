@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'pages/accueil.dart';
 import 'pages/audit.dart';
@@ -13,12 +14,25 @@ import 'pages/niu_acf.dart';
 import 'pages/profil.dart';
 import 'pages/services.dart';
 import 'state/app_state.dart';
+import 'supabase_config.dart';
 import 'theme.dart';
 import 'widgets/communs.dart';
 import 'widgets/coquille.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Sans coordonnées, on démarre quand même : l'application affiche un écran
+  // qui explique quoi renseigner, plutôt qu'un écran noir.
+  if (supabaseConfigure) {
+    // `publishableKey` est le nouveau nom du paramètre : la clé « anon »
+    // du tableau de bord se passe telle quelle.
+    await Supabase.initialize(
+      url: urlSupabase,
+      publishableKey: cleAnonSupabase,
+    );
+  }
+
   final etat = AppState();
   await etat.charger();
   runApp(MonComptable(etat: etat));
@@ -31,6 +45,18 @@ class MonComptable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Un déploiement mal configuré doit dire ce qui lui manque : sans cet
+    // écran, l'application se lancerait pour échouer à la première action.
+    if (!etat.configure) {
+      return MaterialApp(
+        title: 'Mon Comptable — CAM-TAXE',
+        debugShowCheckedModeBanner: false,
+        theme: construireTheme(),
+        darkTheme: construireThemeSombre(),
+        home: const EcranNonConfigure(),
+      );
+    }
+
     // ListenableBuilder : le MaterialApp doit se reconstruire quand le mode
     // d'affichage change, sinon le basculement clair/sombre resterait sans
     // effet (PorteeApp ne rebâtit que ses descendants).
@@ -136,6 +162,87 @@ class RequiertCompte extends StatelessWidget {
                     Navigator.of(context).pushReplacementNamed('/auth'),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Affiché quand `env.json` n'a pas été fourni au build.
+///
+/// Pendant du garde-fou de la version React : mieux vaut une consigne
+/// lisible qu'une application qui se lance pour échouer plus loin.
+class EcranNonConfigure extends StatelessWidget {
+  const EcranNonConfigure({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(Espaces.xl),
+          child: Container(
+            padding: const EdgeInsets.all(Espaces.xxl),
+            decoration: BoxDecoration(
+              color: context.cl.carte,
+              borderRadius: Rayons.brXl,
+              boxShadow: context.cl.ombreCarte,
+              border: Border.all(color: context.cl.ligne),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: context.cl.orangeFantome,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.settings_outlined,
+                      size: 31, color: Palette.orange),
+                ),
+                const SizedBox(height: Espaces.xl),
+                const Text(
+                  'Application non configurée',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: Espaces.sm),
+                Text(
+                  'Les coordonnées du projet Supabase sont absentes. Copiez '
+                  'env.example.json vers env.json, renseignez les deux '
+                  'valeurs, puis relancez :',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    height: 1.55,
+                    color: context.cl.encreDouce,
+                  ),
+                ),
+                const SizedBox(height: Espaces.lg),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(Espaces.md),
+                  decoration: BoxDecoration(
+                    color: context.cl.fondDoux,
+                    borderRadius: Rayons.brMd,
+                  ),
+                  child: const SelectableText(
+                    'flutter run --dart-define-from-file=env.json',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

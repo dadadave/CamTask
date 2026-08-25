@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
 import '../models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -30,6 +31,11 @@ class _PageAuthState extends State<PageAuth> {
   bool _inscription = false;
   Role _role = Role.utilisateur;
   String _erreur = '';
+
+  /// Un appel réseau est en cours : le bouton laisse place à une attente,
+  /// ce qui évite aussi une double inscription sur double appui.
+  bool _envoi = false;
+
   final _fichiers = <String, String>{};
 
   final _nom = TextEditingController();
@@ -55,27 +61,41 @@ class _PageAuthState extends State<PageAuth> {
           Piece(libelle: e.key, fichier: e.value),
       ];
 
-  void _connexion() {
+  /// Exécute [action] en montrant l'attente, puis navigue — ou affiche le
+  /// message d'erreur renvoyé par le back-end, déjà en français.
+  Future<void> _executer(
+    Future<void> Function() action,
+    String message,
+  ) async {
+    setState(() {
+      _envoi = true;
+      _erreur = '';
+    });
+    try {
+      await action();
+      if (!mounted) return;
+      _terminer(message);
+    } on ErreurBackend catch (e) {
+      if (!mounted) return;
+      setState(() => _erreur = e.message);
+    } finally {
+      if (mounted) setState(() => _envoi = false);
+    }
+  }
+
+  Future<void> _connexion() async {
     if (_email.text.trim().isEmpty || _motDePasse.text.trim().isEmpty) {
       setState(() => _erreur = 'Renseignez votre email et votre mot de passe.');
       return;
     }
-    PorteeApp.of(context).seConnecter(
-      Compte(
-        role: Role.utilisateur,
-        nom: _nom.text.isNotEmpty ? _nom.text : _email.text.split('@').first,
-        prenom: _prenom.text,
-        email: _email.text,
-        telephone: _telephone.text,
-        niu: _niu.text,
-        pieces: const [],
-        creeLe: AppState.dateDuJour(),
-      ),
+    final etat = PorteeApp.of(context);
+    await _executer(
+      () => etat.connexion(_email.text.trim(), _motDePasse.text),
+      'Bienvenue sur CAM-TAXE.',
     );
-    _terminer('Bienvenue sur CAM-TAXE.');
   }
 
-  void _inscrire() {
+  Future<void> _inscrire() async {
     final manquants = <String>[];
     if (_role == Role.utilisateur) {
       if (_nom.text.trim().isEmpty) manquants.add('Nom');
@@ -90,9 +110,9 @@ class _PageAuthState extends State<PageAuth> {
           ? "Numéro d'identifiant unique"
           : 'Numéro de contribuable');
     }
-    if (_role == Role.utilisateur && _motDePasse.text.trim().isEmpty) {
-      manquants.add('Mot de passe');
-    }
+    // Le mot de passe vaut pour les deux profils : l'authentification
+    // Supabase en exige un pour chaque compte.
+    if (_motDePasse.text.trim().isEmpty) manquants.add('Mot de passe');
     manquants.addAll(_piecesRequises.where((p) => !_fichiers.containsKey(p)));
 
     if (manquants.isNotEmpty) {
@@ -100,19 +120,20 @@ class _PageAuthState extends State<PageAuth> {
       return;
     }
 
-    PorteeApp.of(context).seConnecter(
-      Compte(
+    final etat = PorteeApp.of(context);
+    await _executer(
+      () => etat.inscription(
         role: _role,
-        nom: _nom.text,
-        prenom: _prenom.text,
-        email: _email.text,
-        telephone: _telephone.text,
-        niu: _niu.text,
+        nom: _nom.text.trim(),
+        prenom: _prenom.text.trim(),
+        email: _email.text.trim(),
+        telephone: _telephone.text.trim(),
+        niu: _niu.text.trim(),
+        motDePasse: _motDePasse.text,
         pieces: _pieces,
-        creeLe: AppState.dateDuJour(),
       ),
+      'Compte créé. Vous pouvez maintenant utiliser nos services.',
     );
-    _terminer('Compte créé. Vous pouvez maintenant utiliser nos services.');
   }
 
   void _terminer(String message) {
@@ -179,12 +200,28 @@ class _PageAuthState extends State<PageAuth> {
                     TexteErreur(texte: _erreur),
                   ],
                   const SizedBox(height: 26),
-                  BoutonEnvoyer(
-                    bloc: true,
-                    libelle: _inscription ? 'Créer mon compte' : 'Se connecter',
-                    icone: Icons.arrow_forward_rounded,
-                    onTap: _inscription ? _inscrire : _connexion,
-                  ),
+                  if (_envoi)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Center(
+                        child: SizedBox(
+                          width: 26,
+                          height: 26,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.6,
+                            color: Palette.orange,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    BoutonEnvoyer(
+                      bloc: true,
+                      libelle:
+                          _inscription ? 'Créer mon compte' : 'Se connecter',
+                      icone: Icons.arrow_forward_rounded,
+                      onTap: _inscription ? _inscrire : _connexion,
+                    ),
                   const SizedBox(height: Espaces.lg),
                   Text(
                     'Il faut au préalable créer un compte pour bénéficier de '
@@ -270,15 +307,15 @@ class _PageAuthState extends State<PageAuth> {
           controleur: _niu,
           majuscules: false,
         ),
-        if (_role == Role.utilisateur) ...[
-          const SizedBox(height: 18),
-          Champ(
-            libelle: 'mot de passe',
-            controleur: _motDePasse,
-            masque: true,
-            majuscules: false,
-          ),
-        ],
+        // Demandé aux deux profils : Supabase exige un mot de passe pour
+        // chaque compte.
+        const SizedBox(height: 18),
+        Champ(
+          libelle: 'mot de passe',
+          controleur: _motDePasse,
+          masque: true,
+          majuscules: false,
+        ),
         const SizedBox(height: 20),
         const LibelleSection(texte: 'Pièces à fournir'),
         const SizedBox(height: 10),

@@ -2,14 +2,62 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:mon_comptable/api/api.dart';
 import 'package:mon_comptable/main.dart';
 import 'package:mon_comptable/models.dart';
 import 'package:mon_comptable/state/app_state.dart';
 import 'package:mon_comptable/theme.dart';
 
-Future<AppState> _etatNeuf() async {
+final _compteFactice = Compte(
+  role: Role.utilisateur,
+  nom: 'NGUEMA',
+  prenom: 'Judicael',
+  email: 'judicael@example.cm',
+  telephone: '699000111',
+  niu: 'P123456789012A',
+  pieces: const [],
+  creeLe: AppState.dateDuJour(),
+);
+
+/// Back-end en memoire : les tests n'ont ni projet Supabase ni reseau.
+class _BackendFactice implements BackendAuth {
+  _BackendFactice({this.session});
+
+  Compte? session;
+
+  @override
+  Future<Compte?> sessionActuelle({List<Piece> pieces = const []}) async =>
+      session;
+
+  @override
+  Future<Compte> connexion(String email, String motDePasse) async =>
+      session = _compteFactice;
+
+  @override
+  Future<Compte> inscription({
+    required Role role,
+    required String nom,
+    required String prenom,
+    required String email,
+    required String telephone,
+    required String niu,
+    required String motDePasse,
+    List<Piece> pieces = const [],
+  }) async =>
+      session = _compteFactice;
+
+  @override
+  Future<void> deconnexion() async => session = null;
+}
+
+/// [connecte] ouvre d'emblee une session, comme au retour d'un lancement
+/// ou l'utilisateur s'etait deja identifie.
+Future<AppState> _etatNeuf({bool connecte = false}) async {
   SharedPreferences.setMockInitialValues({});
-  final etat = AppState();
+  final etat = AppState(
+    backend: _BackendFactice(session: connecte ? _compteFactice : null),
+    configure: true,
+  );
   await etat.charger();
   return etat;
 }
@@ -59,19 +107,7 @@ void main() {
 
   testWidgets('avec un compte, le formulaire du service est accessible',
       (tester) async {
-    final etat = await _etatNeuf();
-    etat.seConnecter(
-      Compte(
-        role: Role.utilisateur,
-        nom: 'NGUEMA',
-        prenom: 'Judicael',
-        email: 'judicael@example.cm',
-        telephone: '699000111',
-        niu: 'P123456789012A',
-        pieces: const [],
-        creeLe: AppState.dateDuJour(),
-      ),
-    );
+    final etat = await _etatNeuf(connecte: true);
 
     await tester.pumpWidget(MonComptable(etat: etat));
     await tester.pumpAndSettle();
@@ -105,19 +141,7 @@ void main() {
   });
 
   testWidgets('une demande envoyée apparaît dans le profil', (tester) async {
-    final etat = await _etatNeuf();
-    etat.seConnecter(
-      Compte(
-        role: Role.utilisateur,
-        nom: 'NGUEMA',
-        prenom: 'Judicael',
-        email: 'judicael@example.cm',
-        telephone: '699000111',
-        niu: 'P123456789012A',
-        pieces: const [],
-        creeLe: AppState.dateDuJour(),
-      ),
-    );
+    final etat = await _etatNeuf(connecte: true);
     etat.envoyerDemande(
       serviceId: 'dsf',
       serviceLibelle: 'DSF — Déclaration statistique et fiscale',

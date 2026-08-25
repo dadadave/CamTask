@@ -22,7 +22,10 @@ class ErreurBackend implements Exception {
 /// `lib/api/api.dart` — même principe que `src/api/index.ts` côté React.
 abstract class BackendAuth {
   /// Le compte de la session en cours, ou `null` si personne n'est connecté.
-  Future<Compte?> sessionActuelle();
+  ///
+  /// [pieces] complète le profil renvoyé : les pièces de l'inscription ne
+  /// sont pas encore stockées côté serveur, elles viennent de l'appareil.
+  Future<Compte?> sessionActuelle({List<Piece> pieces});
 
   /// Crée le compte et ouvre la session dans la foulée.
   ///

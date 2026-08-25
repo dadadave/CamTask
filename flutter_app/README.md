@@ -7,20 +7,48 @@ Cameroun, construite d'après les maquettes fournies.
 
 ## Démarrer
 
-```bash
-flutter pub get
-flutter run                      # sur un appareil ou un émulateur connecté
+L'application s'authentifie auprès de **Supabase** : il lui faut les
+coordonnées du projet, injectées au build depuis un fichier non versionné.
 
-flutter build apk --release      # Android
-flutter build ipa --release      # iOS (nécessite macOS et Xcode)
+```bash
+cp env.example.json env.json     # puis renseigner les deux valeurs
+flutter pub get
+flutter run --dart-define-from-file=env.json
+
+flutter build apk --release --dart-define-from-file=env.json   # Android
+flutter build ipa --release --dart-define-from-file=env.json   # iOS (macOS + Xcode)
 ```
+
+Les deux valeurs se trouvent dans le tableau de bord Supabase,
+*Settings → API* : l'URL du projet et la clé `anon`. Sans le
+`--dart-define-from-file`, l'application démarre sur un écran
+« Application non configurée » qui rappelle quoi faire, plutôt que
+d'échouer à la première action.
+
+La clé `anon` est publique par construction — ce sont les policies RLS de
+[`../supabase/schema.sql`](../supabase/schema.sql) qui protègent les données,
+pas le secret de la clé. Elle n'a pour autant rien à faire dans l'historique
+Git : `env.json` est ignoré.
+
+### Mettre en place le projet Supabase
+
+1. Créer un projet sur [supabase.com](https://supabase.com).
+2. *SQL Editor* : exécuter [`../supabase/schema.sql`](../supabase/schema.sql)
+   en entier. Le script est idempotent, on peut le relancer.
+3. *Authentication → Providers → Email* : **désactiver « Confirm email »**.
+   Sinon `signUp` ne rend aucune session et l'utilisateur doit valider son
+   email avant de pouvoir se connecter.
+4. *Settings → API* : copier l'URL et la clé `anon` dans `env.json`.
 
 Vérifications :
 
 ```bash
 flutter analyze                  # aucun problème attendu
-flutter test                     # 5 tests
+flutter test                     # 8 tests, sans réseau
 ```
+
+Les tests n'appellent pas Supabase : `AppState` accepte un `BackendAuth`
+factice et un indicateur `configure`, ce que `test/widget_test.dart` utilise.
 
 ## Les 7 services
 
@@ -47,24 +75,48 @@ Un compte est obligatoire pour accéder aux services (`RequiertCompte` dans
 - **Personne employée** — CNI, téléphone, plan de localisation, numéro de
   contribuable, adresse email et CNI d'un garant qui se porte caution.
 
+Le mot de passe est demandé aux deux profils : l'authentification Supabase en
+exige un pour chaque compte. Cocher « Personne employée » ne donne aucun
+privilège — le droit de consulter les dossiers des clients vient de
+`profiles.est_agent`, qui se règle depuis le tableau de bord.
+
 ## Structure
 
 ```
 lib/
-  data/          contenus éditoriaux (services, conseil fiscal, audit, DSF)
-  models.dart    compte, demande, pièce, message
-  state/         état de l'application (ChangeNotifier + InheritedNotifier)
-  widgets/       briques d'interface partagées et illustrations
-  pages/         un fichier par écran
-  theme.dart     charte graphique
+  api/
+    backend.dart          l'interface BackendAuth + ErreurBackend
+    supabase_auth.dart    son implémentation Supabase
+    api.dart              le point de bascule (une seule ligne à changer)
+  data/                   contenus éditoriaux (services, conseil fiscal, audit, DSF)
+  models.dart             compte, demande, pièce, message
+  state/                  état de l'application (ChangeNotifier + InheritedNotifier)
+  supabase_config.dart    coordonnées du projet, lues au build
+  widgets/                briques d'interface partagées et illustrations
+  pages/                  un fichier par écran
+  theme.dart              charte graphique
 ```
+
+Les écrans ne connaissent pas Supabase : ils ne parlent qu'à `BackendAuth`.
+Le jour où notre propre API prend le relais, il suffit d'en écrire une autre
+implémentation et de changer la ligne d'export de `lib/api/api.dart`.
 
 ## État des données
 
-Le compte, les demandes et la messagerie sont conservés sur l'appareil via
-`shared_preferences`. Les téléversements (`file_picker`) enregistrent le nom du
-fichier choisi ; l'envoi réel des documents, l'API, le paiement de caution et le
-chat temps réel restent à brancher.
+| | Où |
+| --- | --- |
+| Compte, session, profil | **Supabase** (`auth` + table `profiles`) |
+| Demandes | appareil, via `shared_preferences` |
+| Messagerie | appareil, avec une réponse d'agent simulée |
+| Pièces téléversées | nom du fichier seulement, sur l'appareil |
+
+La session est rétablie au lancement et survit au redémarrage : c'est
+`supabase_flutter` qui conserve le jeton.
+
+Restent à brancher : l'envoi réel des documents vers le bucket privé
+`pieces`, les demandes et la messagerie temps réel (le schéma les sert déjà
+tels quels), et le paiement de caution — qui demande un secret côté serveur,
+donc une Edge Function.
 
 ## Charte
 

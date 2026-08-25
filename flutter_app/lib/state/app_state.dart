@@ -4,7 +4,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../api/api.dart';
 import '../models.dart';
+import '../supabase_config.dart';
 
 const _cle = 'mon-comptable:v1';
 
@@ -21,19 +23,46 @@ const _messageAccueil = Message(
   heure: '09:00',
 );
 
-/// État de l'application : compte, demandes et messagerie.
-/// Persisté dans les préférences locales de l'appareil.
+/// État de l'application.
+///
+/// Le compte et la session viennent de Supabase ([backendAuth]) ; les
+/// demandes, la messagerie et le mode d'affichage restent pour l'instant
+/// dans les préférences locales de l'appareil.
 class AppState extends ChangeNotifier {
+  /// [backend] et [configure] ne sont renseignés que par les tests, qui
+  /// n'ont ni projet Supabase ni réseau. En production, les valeurs par
+  /// défaut sont celles de `api.dart` et de `supabase_config.dart`.
+  AppState({BackendAuth? backend, bool? configure})
+      : _backend = backend ?? backendAuth,
+        _configure = configure ?? supabaseConfigure;
+
+  final BackendAuth _backend;
+  final bool _configure;
+
   Compte? _compte;
   ModeTheme _mode = ModeTheme.systeme;
   List<Demande> _demandes = [];
   List<Message> _messages = [_messageAccueil];
+
+  /// Pièces fournies à l'inscription. Leur téléversement vers le bucket
+  /// privé n'est pas encore branché : on n'en conserve que le nom de
+  /// fichier, d'où cette liste tenue à part du profil Supabase.
+  List<Piece> _piecesCompte = [];
+
   SharedPreferences? _prefs;
+  String _erreurDemarrage = '';
 
   Compte? get compte => _compte;
   List<Demande> get demandes => List.unmodifiable(_demandes);
   List<Message> get messages => List.unmodifiable(_messages);
   bool get connecte => _compte != null;
+
+  /// Les coordonnées du projet Supabase sont-elles présentes ?
+  bool get configure => _configure;
+
+  /// Renseignée quand la session n'a pas pu être rétablie au lancement
+  /// (schéma non exécuté, réseau absent…). Vide le reste du temps.
+  String get erreurDemarrage => _erreurDemarrage;
 
   /// Mode d'affichage choisi : clair, sombre ou celui du système.
   ModeTheme get mode => _mode;
@@ -51,8 +80,18 @@ class AppState extends ChangeNotifier {
     _sauver();
   }
 
+  /* ---------------------------------------------------------------------- */
+  /*  Chargement                                                            */
+  /* ---------------------------------------------------------------------- */
+
   Future<void> charger() async {
     _prefs = await SharedPreferences.getInstance();
+    _lireLocal();
+    await _retablirSession();
+    notifyListeners();
+  }
+
+  void _lireLocal() {
     final brut = _prefs?.getString(_cle);
     if (brut == null) return;
     try {
@@ -61,18 +100,32 @@ class AppState extends ChangeNotifier {
         (m) => m.name == j['mode'],
         orElse: () => ModeTheme.systeme,
       );
-      final c = j['compte'];
-      _compte = c == null ? null : Compte.depuisJson(c as Map<String, dynamic>);
       _demandes = ((j['demandes'] as List<dynamic>?) ?? const [])
           .map((e) => Demande.depuisJson(e as Map<String, dynamic>))
+          .toList();
+      _piecesCompte = ((j['piecesCompte'] as List<dynamic>?) ?? const [])
+          .map((e) => Piece.depuisJson(e as Map<String, dynamic>))
           .toList();
       final msgs = ((j['messages'] as List<dynamic>?) ?? const [])
           .map((e) => Message.depuisJson(e as Map<String, dynamic>))
           .toList();
       if (msgs.isNotEmpty) _messages = msgs;
-      notifyListeners();
     } on FormatException {
       // Données illisibles : on repart d'un état vierge.
+    }
+  }
+
+  /// Rétablit la session Supabase si elle est encore valide.
+  ///
+  /// Un échec ici ne doit pas empêcher l'application de démarrer : on
+  /// retient le message et l'utilisateur se retrouve simplement déconnecté.
+  Future<void> _retablirSession() async {
+    if (!_configure) return;
+    try {
+      _compte = await _backend.sessionActuelle(pieces: _piecesCompte);
+    } on ErreurBackend catch (e) {
+      _compte = null;
+      _erreurDemarrage = e.message;
     }
   }
 
@@ -81,12 +134,69 @@ class AppState extends ChangeNotifier {
       _cle,
       jsonEncode({
         'mode': _mode.name,
-        'compte': _compte?.versJson(),
         'demandes': _demandes.map((d) => d.versJson()).toList(),
         'messages': _messages.map((m) => m.versJson()).toList(),
+        'piecesCompte': _piecesCompte.map((p) => p.versJson()).toList(),
       }),
     );
   }
+
+  /* ---------------------------------------------------------------------- */
+  /*  Authentification                                                      */
+  /* ---------------------------------------------------------------------- */
+
+  /// Lève une [ErreurBackend] dont le message est affichable tel quel.
+  Future<void> connexion(String email, String motDePasse) async {
+    _compte = await _backend.connexion(email, motDePasse);
+    _erreurDemarrage = '';
+    notifyListeners();
+  }
+
+  /// Lève une [ErreurBackend] dont le message est affichable tel quel.
+  Future<void> inscription({
+    required Role role,
+    required String nom,
+    required String prenom,
+    required String email,
+    required String telephone,
+    required String niu,
+    required String motDePasse,
+    List<Piece> pieces = const [],
+  }) async {
+    _compte = await _backend.inscription(
+      role: role,
+      nom: nom,
+      prenom: prenom,
+      email: email,
+      telephone: telephone,
+      niu: niu,
+      motDePasse: motDePasse,
+      pieces: pieces,
+    );
+    _piecesCompte = pieces;
+    _erreurDemarrage = '';
+    notifyListeners();
+    await _sauver();
+  }
+
+  Future<void> seDeconnecter() async {
+    // La session locale est vidée quoi qu'il arrive : si l'appel réseau
+    // échoue, l'utilisateur ne doit pas rester connecté malgré lui.
+    try {
+      await _backend.deconnexion();
+    } on ErreurBackend {
+      // Sans réseau, le jeton local est tout de même effacé par signOut.
+    } finally {
+      _compte = null;
+      _piecesCompte = [];
+      notifyListeners();
+      await _sauver();
+    }
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /*  Demandes et messagerie (stockage local)                               */
+  /* ---------------------------------------------------------------------- */
 
   static String _identifiant() {
     final r = Random().nextInt(1 << 32).toRadixString(16);
@@ -103,18 +213,6 @@ class AppState extends ChangeNotifier {
     final n = DateTime.now();
     return '${n.day.toString().padLeft(2, '0')}/'
         '${n.month.toString().padLeft(2, '0')}/${n.year}';
-  }
-
-  void seConnecter(Compte compte) {
-    _compte = compte;
-    notifyListeners();
-    _sauver();
-  }
-
-  void seDeconnecter() {
-    _compte = null;
-    notifyListeners();
-    _sauver();
   }
 
   Demande envoyerDemande({
