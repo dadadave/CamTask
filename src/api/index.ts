@@ -14,4 +14,10 @@ import type { Backend } from './types'
  */
 export const backend: Backend = backendSupabase
 
+/**
+ * Le backend a-t-il de quoi fonctionner ? Sert à afficher un écran
+ * d'explication plutôt qu'une page blanche sur un déploiement mal configuré.
+ */
+export { supabaseConfigure as backendConfigure } from './supabase'
+
 export * from './types'

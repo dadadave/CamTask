@@ -16,16 +16,32 @@ import {
 const URL = import.meta.env.VITE_SUPABASE_URL
 const CLE = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!URL || !CLE) {
-  throw new Error(
-    "Configuration Supabase absente : copiez .env.example vers .env et " +
-      'renseignez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.',
-  )
-}
+/**
+ * Le `.env` est-il renseigné ?
+ *
+ * On se garde bien de lever une erreur au chargement du module : le build
+ * réussit — Vite n'exécute pas ce code — mais le déploiement n'afficherait
+ * qu'une page blanche, sans la moindre explication. L'application préfère
+ * afficher un écran qui dit quoi faire.
+ */
+export const supabaseConfigure = Boolean(URL && CLE)
 
-const sb: SupabaseClient = createClient(URL, CLE, {
-  auth: { persistSession: true, autoRefreshToken: true },
-})
+const MESSAGE_CONFIG =
+  'Configuration Supabase absente : renseignez VITE_SUPABASE_URL et ' +
+  'VITE_SUPABASE_ANON_KEY (voir .env.example).'
+
+let client: SupabaseClient | null = null
+
+/** Client créé à la première utilisation, jamais au chargement du module. */
+function sb(): SupabaseClient {
+  if (!client) {
+    if (!supabaseConfigure) throw new ErreurBackend(MESSAGE_CONFIG)
+    client = createClient(URL, CLE, {
+      auth: { persistSession: true, autoRefreshToken: true },
+    })
+  }
+  return client
+}
 
 const BUCKET = 'pieces'
 
@@ -79,7 +95,7 @@ function echouer(message: string, cause?: unknown): never {
 }
 
 async function idUtilisateur(): Promise<string> {
-  const { data } = await sb.auth.getUser()
+  const { data } = await sb().auth.getUser()
   if (!data.user) echouer('Votre session a expiré. Reconnectez-vous.')
   return data.user.id
 }
@@ -112,12 +128,12 @@ async function televerser(
     const dossier = demandeId ?? 'compte'
     const chemin = `${uid}/${dossier}/${crypto.randomUUID()}-${assainir(fichier.name)}`
 
-    const { error: erreurDepot } = await sb.storage
+    const { error: erreurDepot } = await sb().storage
       .from(BUCKET)
       .upload(chemin, fichier, { contentType: fichier.type || undefined })
     if (erreurDepot) echouer(`Envoi de « ${label} » impossible : ${erreurDepot.message}`)
 
-    const { error: erreurLigne } = await sb.from('pieces').insert({
+    const { error: erreurLigne } = await sb().from('pieces').insert({
       user_id: uid,
       demande_id: demandeId,
       label,
@@ -133,7 +149,7 @@ async function televerser(
 }
 
 async function piecesDuCompte(uid: string): Promise<Piece[]> {
-  const { data, error } = await sb
+  const { data, error } = await sb()
     .from('pieces')
     .select('label, nom_fichier')
     .eq('user_id', uid)
@@ -143,7 +159,7 @@ async function piecesDuCompte(uid: string): Promise<Piece[]> {
 }
 
 async function compteDepuisProfil(uid: string, email: string): Promise<Compte> {
-  const { data, error } = await sb
+  const { data, error } = await sb()
     .from('profiles')
     .select('role, nom, prenom, telephone, niu, cree_le')
     .eq('id', uid)
@@ -168,7 +184,7 @@ async function compteDepuisProfil(uid: string, email: string): Promise<Compte> {
 
 export const backendSupabase: Backend = {
   async sessionActuelle() {
-    const { data } = await sb.auth.getSession()
+    const { data } = await sb().auth.getSession()
     const user = data.session?.user
     if (!user) return null
     return compteDepuisProfil(user.id, user.email ?? '')
@@ -179,7 +195,7 @@ export const backendSupabase: Backend = {
 
     // Le profil est créé côté base par le déclencheur `on_auth_user_created`
     // à partir de ces métadonnées.
-    const { data, error } = await sb.auth.signUp({
+    const { data, error } = await sb().auth.signUp({
       email,
       password: motDePasse,
       options: { data: { role, nom, prenom, telephone, niu } },
@@ -201,7 +217,7 @@ export const backendSupabase: Backend = {
   },
 
   async connexion(email: string, motDePasse: string) {
-    const { data, error } = await sb.auth.signInWithPassword({
+    const { data, error } = await sb().auth.signInWithPassword({
       email,
       password: motDePasse,
     })
@@ -210,12 +226,12 @@ export const backendSupabase: Backend = {
   },
 
   async deconnexion() {
-    const { error } = await sb.auth.signOut()
+    const { error } = await sb().auth.signOut()
     if (error) echouer(error.message, error)
   },
 
   async listerDemandes() {
-    const { data, error } = await sb
+    const { data, error } = await sb()
       .from('demandes')
       .select('id, service_id, service_label, resume, statut, cree_le, pieces(label, nom_fichier)')
       .order('cree_le', { ascending: false })
@@ -240,7 +256,7 @@ export const backendSupabase: Backend = {
   async creerDemande({ serviceId, serviceLabel, resume, pieces = [] }: DemandeInput) {
     const uid = await idUtilisateur()
 
-    const { data, error } = await sb
+    const { data, error } = await sb()
       .from('demandes')
       .insert({
         user_id: uid,
@@ -268,7 +284,7 @@ export const backendSupabase: Backend = {
   },
 
   async listerMessages() {
-    const { data, error } = await sb
+    const { data, error } = await sb()
       .from('messages')
       .select('id, auteur, texte, nom_fichier, cree_le')
       .order('cree_le', { ascending: true })
@@ -291,13 +307,13 @@ export const backendSupabase: Backend = {
     let chemin: string | null = null
     if (fichier) {
       chemin = `${uid}/chat/${crypto.randomUUID()}-${assainir(fichier.name)}`
-      const { error } = await sb.storage
+      const { error } = await sb().storage
         .from(BUCKET)
         .upload(chemin, fichier, { contentType: fichier.type || undefined })
       if (error) echouer(`Envoi du document impossible : ${error.message}`)
     }
 
-    const { data, error } = await sb
+    const { data, error } = await sb()
       .from('messages')
       .insert({
         user_id: uid,
@@ -326,10 +342,10 @@ export const backendSupabase: Backend = {
     let annule = false
 
     void (async () => {
-      const { data } = await sb.auth.getUser()
+      const { data } = await sb().auth.getUser()
       if (!data.user || annule) return
 
-      canal = sb
+      canal = sb()
         .channel(`messages:${data.user.id}`)
         .on(
           'postgres_changes',
@@ -363,7 +379,7 @@ export const backendSupabase: Backend = {
 
     return () => {
       annule = true
-      if (canal) void sb.removeChannel(canal)
+      if (canal) void sb().removeChannel(canal)
     }
   },
 }

@@ -26,8 +26,9 @@ npm run dev            # http://localhost:5173
 npm run build          # build de production dans dist/
 ```
 
-Sans les deux variables du `.env`, l'application refuse de démarrer avec un
-message explicite : elle n'a plus de mode hors-ligne.
+Sans les deux variables du `.env`, l'application affiche un écran
+« Application non configurée » qui rappelle quoi renseigner : elle n'a plus de
+mode hors-ligne.
 
 L'interface est calée sur les dimensions des maquettes (430 × 932). Sur grand
 écran elle s'affiche dans un cadre téléphone centré ; sur mobile elle occupe
@@ -92,6 +93,13 @@ désormais dans **Supabase** (Postgres + Auth + Storage + Realtime).
 
 La clé `anon` est publique par construction : ce sont les policies RLS du
 script SQL qui protègent les données, pas le secret de la clé.
+
+### Déploiement
+
+Les deux variables doivent aussi être déclarées chez l'hébergeur (sur Vercel :
+*Settings → Environment Variables*), et le projet redéployé. Elles sont lues à
+la compilation : un build qui n'en dispose pas réussit quand même, mais le site
+livré n'affichera que l'écran « Application non configurée ».
 
 ### Ce que contient la base
 
