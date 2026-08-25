@@ -7,9 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Compte, Demande, Message, Piece } from './types'
-
-const CLE = 'mon-comptable:v1'
+import { backend, type DemandeInput, type InscriptionInput } from '../api'
+import type { Compte, Demande, Message } from './types'
 
 type Etat = {
   compte: Compte | null
@@ -19,33 +18,10 @@ type Etat = {
 
 const ETAT_VIDE: Etat = { compte: null, demandes: [], messages: [] }
 
-function lire(): Etat {
-  try {
-    const brut = localStorage.getItem(CLE)
-    if (!brut) return ETAT_VIDE
-    return { ...ETAT_VIDE, ...(JSON.parse(brut) as Partial<Etat>) }
-  } catch {
-    return ETAT_VIDE
-  }
-}
-
-type AppContextValue = Etat & {
-  connecte: boolean
-  seConnecter: (compte: Compte) => void
-  seDeconnecter: () => void
-  envoyerDemande: (input: {
-    serviceId: string
-    serviceLabel: string
-    resume: string
-    pieces?: Piece[]
-  }) => Demande
-  envoyerMessage: (texte: string, fichier?: string) => void
-  toast: string | null
-  afficherToast: (texte: string) => void
-}
-
-const AppContext = createContext<AppContextValue | null>(null)
-
+/**
+ * Accueil de la messagerie. Affiché tant que la conversation est vide : ce
+ * n'est pas un message stocké, seulement le premier mot du conseiller.
+ */
 const MESSAGE_ACCUEIL: Message = {
   id: 'bienvenue',
   auteur: 'agent',
@@ -54,28 +30,27 @@ const MESSAGE_ACCUEIL: Message = {
   heure: '09:00',
 }
 
-function maintenantHeure() {
-  return new Date().toLocaleTimeString('fr-FR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+type AppContextValue = Etat & {
+  connecte: boolean
+  /** Faux tant que la session enregistrée n'a pas été relue au démarrage. */
+  pret: boolean
+  inscription: (input: InscriptionInput) => Promise<void>
+  connexion: (email: string, motDePasse: string) => Promise<void>
+  seDeconnecter: () => Promise<void>
+  envoyerDemande: (input: DemandeInput) => Promise<Demande>
+  envoyerMessage: (texte: string, fichier?: File) => Promise<void>
+  toast: string | null
+  afficherToast: (texte: string) => void
 }
 
-function identifiant() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
-}
+const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [etat, setEtat] = useState<Etat>(() => {
-    const initial = lire()
-    if (initial.messages.length === 0) initial.messages = [MESSAGE_ACCUEIL]
-    return initial
-  })
+  const [etat, setEtat] = useState<Etat>(ETAT_VIDE)
+  const [pret, setPret] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
-  useEffect(() => {
-    localStorage.setItem(CLE, JSON.stringify(etat))
-  }, [etat])
+  const afficherToast = useCallback((texte: string) => setToast(texte), [])
 
   useEffect(() => {
     if (!toast) return
@@ -83,72 +58,102 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t)
   }, [toast])
 
-  const afficherToast = useCallback((texte: string) => setToast(texte), [])
-
-  const seConnecter = useCallback((compte: Compte) => {
-    setEtat((e) => ({ ...e, compte }))
+  /** Charge le dossier de l'utilisateur : ses demandes et sa conversation. */
+  const charger = useCallback(async (compte: Compte) => {
+    const [demandes, messages] = await Promise.all([
+      backend.listerDemandes(),
+      backend.listerMessages(),
+    ])
+    setEtat({ compte, demandes, messages })
   }, [])
 
-  const seDeconnecter = useCallback(() => {
-    setEtat((e) => ({ ...e, compte: null }))
-  }, [])
-
-  const envoyerDemande: AppContextValue['envoyerDemande'] = useCallback(
-    ({ serviceId, serviceLabel, resume, pieces = [] }) => {
-      const demande: Demande = {
-        id: identifiant(),
-        serviceId,
-        serviceLabel,
-        resume,
-        pieces,
-        statut: 'Envoyée',
-        date: new Date().toLocaleDateString('fr-FR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        }),
+  // Session déjà ouverte sur cet appareil ?
+  useEffect(() => {
+    let vivant = true
+    void (async () => {
+      try {
+        const compte = await backend.sessionActuelle()
+        if (!vivant) return
+        if (compte) await charger(compte)
+      } catch {
+        // Session illisible ou serveur injoignable : on démarre déconnecté.
+      } finally {
+        if (vivant) setPret(true)
       }
-      setEtat((e) => ({ ...e, demandes: [demande, ...e.demandes] }))
-      return demande
+    })()
+    return () => {
+      vivant = false
+    }
+  }, [charger])
+
+  // Réponses des agents, en temps réel.
+  useEffect(() => {
+    if (!etat.compte) return
+    const annuler = backend.souscrireMessages((m) => {
+      setEtat((e) =>
+        e.messages.some((x) => x.id === m.id) ? e : { ...e, messages: [...e.messages, m] },
+      )
+    })
+    return annuler
+  }, [etat.compte])
+
+  const inscription = useCallback(
+    async (input: InscriptionInput) => {
+      const compte = await backend.inscription(input)
+      await charger(compte)
     },
-    [],
+    [charger],
   )
 
-  const envoyerMessage = useCallback((texte: string, fichier?: string) => {
-    const mien: Message = {
-      id: identifiant(),
-      auteur: 'moi',
-      texte,
-      fichier,
-      heure: maintenantHeure(),
-    }
-    setEtat((e) => ({ ...e, messages: [...e.messages, mien] }))
+  const connexion = useCallback(
+    async (email: string, motDePasse: string) => {
+      const compte = await backend.connexion(email, motDePasse)
+      await charger(compte)
+    },
+    [charger],
+  )
 
-    // Réponse simulée de l'agent — le back-office sera branché plus tard.
-    setTimeout(() => {
-      const reponse: Message = {
-        id: identifiant(),
-        auteur: 'agent',
-        texte:
-          'Bien reçu, je consulte votre dossier et je reviens vers vous dans quelques instants.',
-        heure: maintenantHeure(),
-      }
-      setEtat((e) => ({ ...e, messages: [...e.messages, reponse] }))
-    }, 1100)
+  const seDeconnecter = useCallback(async () => {
+    await backend.deconnexion()
+    setEtat(ETAT_VIDE)
+  }, [])
+
+  const envoyerDemande = useCallback(async (input: DemandeInput) => {
+    const demande = await backend.creerDemande(input)
+    setEtat((e) => ({ ...e, demandes: [demande, ...e.demandes] }))
+    return demande
+  }, [])
+
+  const envoyerMessage = useCallback(async (texte: string, fichier?: File) => {
+    const mien = await backend.envoyerMessage({ texte, fichier })
+    setEtat((e) => ({ ...e, messages: [...e.messages, mien] }))
   }, [])
 
   const valeur = useMemo<AppContextValue>(
     () => ({
       ...etat,
+      messages: etat.messages.length ? etat.messages : [MESSAGE_ACCUEIL],
       connecte: etat.compte !== null,
-      seConnecter,
+      pret,
+      inscription,
+      connexion,
       seDeconnecter,
       envoyerDemande,
       envoyerMessage,
       toast,
       afficherToast,
     }),
-    [etat, seConnecter, seDeconnecter, envoyerDemande, envoyerMessage, toast, afficherToast],
+    [
+      etat,
+      pret,
+      inscription,
+      connexion,
+      seDeconnecter,
+      envoyerDemande,
+      envoyerMessage,
+      toast,
+      afficherToast,
+    ],
   )
 
   return <AppContext.Provider value={valeur}>{children}</AppContext.Provider>

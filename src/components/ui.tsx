@@ -179,8 +179,10 @@ export function Upload({
   ghost,
 }: {
   label: string
+  /** Nom affiché du document déjà choisi. */
   fileName?: string
-  onPick: (name: string) => void
+  /** Reçoit le fichier lui-même : c'est lui qui part vers le serveur. */
+  onPick: (fichier: File) => void
   accept?: string
   ghost?: boolean
 }) {
@@ -213,7 +215,7 @@ export function Upload({
         accept={accept}
         onChange={(e) => {
           const f = e.target.files?.[0]
-          if (f) onPick(f.name)
+          if (f) onPick(f)
           e.target.value = ''
         }}
       />
@@ -221,15 +223,27 @@ export function Upload({
   )
 }
 
-/** Gère une liste de documents téléversés (label → nom de fichier). */
+/**
+ * Gère une liste de documents choisis (label → fichier).
+ *
+ * `fichiers` ne contient que les noms, pour l'affichage ; `pieces` porte les
+ * fichiers eux-mêmes, prêts à être envoyés au serveur.
+ */
 export function useUploads() {
-  const [fichiers, setFichiers] = useState<Record<string, string>>({})
-  const definir = (label: string, name: string) =>
-    setFichiers((f) => ({ ...f, [label]: name }))
-  const pieces = Object.entries(fichiers).map(([label, fileName]) => ({
+  const [choisis, setChoisis] = useState<Record<string, File>>({})
+
+  const definir = (label: string, fichier: File) =>
+    setChoisis((f) => ({ ...f, [label]: fichier }))
+
+  const fichiers = Object.fromEntries(
+    Object.entries(choisis).map(([label, f]) => [label, f.name]),
+  ) as Record<string, string>
+
+  const pieces = Object.entries(choisis).map(([label, fichier]) => ({
     label,
-    fileName,
+    fichier,
   }))
+
   return { fichiers, definir, pieces }
 }
 
@@ -241,16 +255,20 @@ export function BoutonEnvoyer({
   onClick,
   libelle = 'Envoyer',
   bloc,
+  disabled,
 }: {
   onClick: () => void
   libelle?: string
   bloc?: boolean
+  /** Empêche un second envoi tant que le premier est en cours. */
+  disabled?: boolean
 }) {
   return (
     <button
       type="button"
       className={bloc ? 'btn btn--block' : 'btn btn--send'}
       onClick={onClick}
+      disabled={disabled}
     >
       {libelle}
     </button>

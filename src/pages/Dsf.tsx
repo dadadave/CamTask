@@ -13,6 +13,7 @@ import {
   useUploads,
 } from '../components/ui'
 import { DESTINATIONS_DSF, SECTIONS_DSF } from '../data/dsf'
+import { messageErreur } from '../api'
 import { useApp } from '../store/AppContext'
 
 export function Dsf() {
@@ -25,7 +26,9 @@ export function Dsf() {
   const [entreprise, setEntreprise] = useState('')
   const [erreur, setErreur] = useState('')
 
-  function envoyer() {
+  const [envoi, setEnvoi] = useState(false)
+
+  async function envoyer() {
     const manquants = [
       !niu.trim() && 'NIU',
       !destination && 'DSF pour impôt ou pour la banque',
@@ -37,14 +40,22 @@ export function Dsf() {
       return
     }
 
-    envoyerDemande({
-      serviceId: 'dsf',
-      serviceLabel: 'DSF — Déclaration statistique et fiscale',
-      resume: `NIU ${niu} — ${destination} — ${entreprise}`,
-      pieces,
-    })
-    afficherToast(`DSF transmise (${pieces.length} pièce(s) jointe(s)).`)
-    navigate('/profil')
+    setErreur('')
+    setEnvoi(true)
+    try {
+      await envoyerDemande({
+        serviceId: 'dsf',
+        serviceLabel: 'DSF — Déclaration statistique et fiscale',
+        resume: `NIU ${niu} — ${destination} — ${entreprise}`,
+        pieces,
+      })
+      afficherToast(`DSF transmise (${pieces.length} pièce(s) jointe(s)).`)
+      navigate('/profil')
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (
@@ -98,7 +109,11 @@ export function Dsf() {
 
         <div className="form">
           {erreur && <p className="field__error">{erreur}</p>}
-          <BoutonEnvoyer onClick={envoyer} />
+          <BoutonEnvoyer
+            onClick={envoyer}
+            libelle={envoi ? 'Envoi…' : 'Envoyer'}
+            disabled={envoi}
+          />
         </div>
 
         <DiscuterAgent sujet="DSF" />

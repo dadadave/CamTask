@@ -9,13 +9,14 @@ import {
   IconMic,
   IconSmile,
 } from '../components/icons'
+import { messageErreur } from '../api'
 import { useApp } from '../store/AppContext'
 
 export function Chat() {
   const navigate = useNavigate()
   const location = useLocation()
   const sujet = (location.state as { sujet?: string } | null)?.sujet
-  const { messages, envoyerMessage } = useApp()
+  const { messages, envoyerMessage, afficherToast } = useApp()
 
   const [texte, setTexte] = useState(sujet ? `Bonjour, au sujet de « ${sujet} » : ` : '')
   const fin = useRef<HTMLDivElement>(null)
@@ -25,11 +26,16 @@ export function Chat() {
     fin.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
-  function envoyer() {
-    const t = texte.trim()
-    if (!t) return
-    envoyerMessage(t)
+  async function envoyer(t: string, fichier?: File) {
+    if (!t && !fichier) return
     setTexte('')
+    try {
+      await envoyerMessage(t, fichier)
+    } catch (e) {
+      afficherToast(messageErreur(e))
+      // Le message n'est pas parti : on le rend à l'utilisateur.
+      if (t) setTexte(t)
+    }
   }
 
   return (
@@ -75,7 +81,7 @@ export function Chat() {
               placeholder="Votre message…"
               value={texte}
               onChange={(e) => setTexte(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && envoyer()}
+              onKeyDown={(e) => e.key === 'Enter' && void envoyer(texte.trim())}
             />
             <button
               className="chat__icon"
@@ -92,7 +98,11 @@ export function Chat() {
               <IconClip />
             </button>
           </div>
-          <button className="chat__mic" onClick={envoyer} aria-label="Envoyer">
+          <button
+            className="chat__mic"
+            onClick={() => void envoyer(texte.trim())}
+            aria-label="Envoyer"
+          >
             {texte.trim() ? <IconClip size={20} /> : <IconMic />}
           </button>
         </div>
@@ -104,8 +114,7 @@ export function Chat() {
           accept="application/pdf,image/*"
           onChange={(e) => {
             const f = e.target.files?.[0]
-            if (f) envoyerMessage(texte.trim() || 'Document joint', f.name)
-            setTexte('')
+            if (f) void envoyer(texte.trim() || 'Document joint', f)
             e.target.value = ''
           }}
         />

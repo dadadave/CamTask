@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { backendConfigure } from './api'
 import { RequiertCompte } from './components/Layout'
 import { useApp } from './store/AppContext'
 import { Accueil } from './pages/Accueil'
@@ -19,8 +20,36 @@ function protege(element: JSX.Element) {
   return <RequiertCompte>{element}</RequiertCompte>
 }
 
+/**
+ * Affiché quand le `.env` n'a pas été renseigné : sans back-end, aucun écran
+ * de l'application ne peut fonctionner. Mieux vaut le dire que laisser une
+ * page blanche.
+ */
+function ConfigurationManquante() {
+  return (
+    <div className="gate">
+      <h3>Application non configurée</h3>
+      <p>
+        Les variables <code>VITE_SUPABASE_URL</code> et{' '}
+        <code>VITE_SUPABASE_ANON_KEY</code> sont absentes. Renseignez-les dans le
+        fichier <code>.env</code> — ou dans les variables d'environnement de
+        l'hébergeur — puis relancez le build.
+      </p>
+      <p>Le modèle se trouve dans .env.example, à la racine du dépôt.</p>
+    </div>
+  )
+}
+
 export default function App() {
   const { toast } = useApp()
+
+  if (!backendConfigure) {
+    return (
+      <div className="phone">
+        <ConfigurationManquante />
+      </div>
+    )
+  }
 
   return (
     <div className="phone">

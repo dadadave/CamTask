@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArtTax } from '../components/icons'
 import { Field, Upload, useUploads } from '../components/ui'
+import { messageErreur } from '../api'
 import { useApp } from '../store/AppContext'
 import type { Role } from '../store/types'
 
@@ -23,12 +24,13 @@ const PIECES_EMPLOYE = [
 export function Auth() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { seConnecter, afficherToast } = useApp()
+  const { connexion, inscription, afficherToast } = useApp()
   const retour = (location.state as { from?: string } | null)?.from ?? '/accueil'
 
   const [onglet, setOnglet] = useState<Onglet>('in')
   const [role, setRole] = useState<Role>('utilisateur')
   const [erreur, setErreur] = useState('')
+  const [envoi, setEnvoi] = useState(false)
 
   const [nom, setNom] = useState('')
   const [prenom, setPrenom] = useState('')
@@ -40,26 +42,25 @@ export function Auth() {
   const { fichiers, definir, pieces } = useUploads()
   const piecesRequises = role === 'utilisateur' ? PIECES_UTILISATEUR : PIECES_EMPLOYE
 
-  function connexion() {
+  async function soumettreConnexion() {
     if (!email.trim() || !motDePasse.trim()) {
       setErreur('Renseignez votre email et votre mot de passe.')
       return
     }
-    seConnecter({
-      role: 'utilisateur',
-      nom: nom || email.split('@')[0],
-      prenom,
-      email,
-      telephone,
-      niu,
-      pieces: [],
-      creeLe: new Date().toLocaleDateString('fr-FR'),
-    })
-    afficherToast('Bienvenue sur CAM-TAXE.')
-    navigate(retour, { replace: true })
+    setErreur('')
+    setEnvoi(true)
+    try {
+      await connexion(email.trim(), motDePasse)
+      afficherToast('Bienvenue sur CAM-TAXE.')
+      navigate(retour, { replace: true })
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnvoi(false)
+    }
   }
 
-  function inscription() {
+  async function soumettreInscription() {
     const manquants: string[] = []
     if (role === 'utilisateur') {
       if (!nom.trim()) manquants.push('Nom')
@@ -71,7 +72,7 @@ export function Auth() {
       manquants.push(
         role === 'utilisateur' ? "Numéro d'identifiant unique" : 'Numéro de contribuable',
       )
-    if (!motDePasse.trim() && role === 'utilisateur') manquants.push('Mot de passe')
+    if (!motDePasse.trim()) manquants.push('Mot de passe')
 
     const docsManquants = piecesRequises.filter((p) => !fichiers[p])
     if (manquants.length || docsManquants.length) {
@@ -81,18 +82,26 @@ export function Auth() {
       return
     }
 
-    seConnecter({
-      role,
-      nom,
-      prenom,
-      email,
-      telephone,
-      niu,
-      pieces,
-      creeLe: new Date().toLocaleDateString('fr-FR'),
-    })
-    afficherToast('Compte créé. Vous pouvez maintenant utiliser nos services.')
-    navigate(retour, { replace: true })
+    setErreur('')
+    setEnvoi(true)
+    try {
+      await inscription({
+        role,
+        nom,
+        prenom,
+        email: email.trim(),
+        telephone,
+        niu,
+        motDePasse,
+        pieces,
+      })
+      afficherToast('Compte créé. Vous pouvez maintenant utiliser nos services.')
+      navigate(retour, { replace: true })
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (
@@ -135,8 +144,8 @@ export function Auth() {
               />
             </div>
             {erreur && <p className="field__error">{erreur}</p>}
-            <button className="auth__submit" onClick={connexion}>
-              sign in
+            <button className="auth__submit" onClick={soumettreConnexion} disabled={envoi}>
+              {envoi ? 'Connexion…' : 'sign in'}
             </button>
           </>
         ) : (
@@ -182,14 +191,12 @@ export function Auth() {
                 value={niu}
                 onChange={setNiu}
               />
-              {role === 'utilisateur' && (
-                <Field
-                  label="mot de passe"
-                  type="password"
-                  value={motDePasse}
-                  onChange={setMotDePasse}
-                />
-              )}
+              <Field
+                label="mot de passe"
+                type="password"
+                value={motDePasse}
+                onChange={setMotDePasse}
+              />
             </div>
 
             <div className="auth__docs">
@@ -205,8 +212,8 @@ export function Auth() {
             </div>
 
             {erreur && <p className="field__error">{erreur}</p>}
-            <button className="auth__submit" onClick={inscription}>
-              sign up
+            <button className="auth__submit" onClick={soumettreInscription} disabled={envoi}>
+              {envoi ? 'Création du compte…' : 'sign up'}
             </button>
           </>
         )}

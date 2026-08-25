@@ -28,8 +28,20 @@ export function Ecran({
  * l'inscription en gardant la page demandée en mémoire.
  */
 export function RequiertCompte({ children }: { children: ReactNode }) {
-  const { connecte } = useApp()
+  const { connecte, pret } = useApp()
   const location = useLocation()
+
+  // Tant que la session enregistrée n'a pas été relue, on ne sait pas encore
+  // si l'utilisateur est connecté : le renvoyer vers /auth le déconnecterait
+  // visuellement à chaque rechargement de page.
+  if (!pret) {
+    return (
+      <Ecran nav={false}>
+        <p className="empty">Chargement…</p>
+      </Ecran>
+    )
+  }
+
   if (!connecte) {
     return <Navigate to="/auth" replace state={{ from: location.pathname }} />
   }

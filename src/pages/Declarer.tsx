@@ -11,6 +11,7 @@ import {
   Upload,
   useUploads,
 } from '../components/ui'
+import { messageErreur } from '../api'
 import { useApp } from '../store/AppContext'
 
 const TYPES_IMPOTS = [
@@ -43,7 +44,9 @@ export function Declarer() {
   const [nature, setNature] = useState('')
   const [erreur, setErreur] = useState('')
 
-  function envoyer() {
+  const [envoi, setEnvoi] = useState(false)
+
+  async function envoyer() {
     const manquants = [
       !niu.trim() && 'NIU',
       !type && "Type d'impôts",
@@ -56,14 +59,22 @@ export function Declarer() {
       return
     }
 
-    envoyerDemande({
-      serviceId: 'declarer',
-      serviceLabel: 'Declarer et payer vos impots',
-      resume: `NIU ${niu} — ${type} — ${montant} FCFA — Activité : ${nature}`,
-      pieces,
-    })
-    afficherToast('Déclaration transmise. Un agent valide le montant à payer.')
-    navigate('/profil')
+    setErreur('')
+    setEnvoi(true)
+    try {
+      await envoyerDemande({
+        serviceId: 'declarer',
+        serviceLabel: 'Declarer et payer vos impots',
+        resume: `NIU ${niu} — ${type} — ${montant} FCFA — Activité : ${nature}`,
+        pieces,
+      })
+      afficherToast('Déclaration transmise. Un agent valide le montant à payer.')
+      navigate('/profil')
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (
@@ -94,7 +105,11 @@ export function Declarer() {
           ))}
 
           {erreur && <p className="field__error">{erreur}</p>}
-          <BoutonEnvoyer onClick={envoyer} />
+          <BoutonEnvoyer
+            onClick={envoyer}
+            libelle={envoi ? 'Envoi…' : 'Envoyer'}
+            disabled={envoi}
+          />
         </div>
 
         <DiscuterAgent sujet="Declarer et payer vos impots" />

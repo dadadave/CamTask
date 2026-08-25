@@ -11,6 +11,7 @@ import {
   Upload,
   useUploads,
 } from '../components/ui'
+import { messageErreur } from '../api'
 import { useApp } from '../store/AppContext'
 
 /** Pièces justificatives que l'utilisateur peut joindre à son contentieux. */
@@ -29,19 +30,29 @@ export function Contentieux() {
   const [prejudice, setPrejudice] = useState('')
   const [erreur, setErreur] = useState('')
 
-  function envoyer() {
+  const [envoi, setEnvoi] = useState(false)
+
+  async function envoyer() {
     if (!prejudice.trim()) {
       setErreur('Décrivez la nature du préjudice subi.')
       return
     }
-    envoyerDemande({
-      serviceId: 'contentieux',
-      serviceLabel: 'Contentieux fiscal',
-      resume: `${niu ? `NIU ${niu} — ` : ''}Préjudice : ${prejudice.trim()}`,
-      pieces,
-    })
-    afficherToast('Votre contentieux a été transmis à un conseiller.')
-    navigate('/profil')
+    setErreur('')
+    setEnvoi(true)
+    try {
+      await envoyerDemande({
+        serviceId: 'contentieux',
+        serviceLabel: 'Contentieux fiscal',
+        resume: `${niu ? `NIU ${niu} — ` : ''}Préjudice : ${prejudice.trim()}`,
+        pieces,
+      })
+      afficherToast('Votre contentieux a été transmis à un conseiller.')
+      navigate('/profil')
+    } catch (e) {
+      setErreur(messageErreur(e))
+    } finally {
+      setEnvoi(false)
+    }
   }
 
   return (
@@ -85,7 +96,11 @@ export function Contentieux() {
           </div>
 
           {erreur && <p className="field__error">{erreur}</p>}
-          <BoutonEnvoyer onClick={envoyer} />
+          <BoutonEnvoyer
+            onClick={envoyer}
+            libelle={envoi ? 'Envoi…' : 'Envoyer'}
+            disabled={envoi}
+          />
         </div>
 
         <DiscuterAgent sujet="Contentieux fiscal" />
