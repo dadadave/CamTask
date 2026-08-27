@@ -141,7 +141,18 @@ alter table public.pieces   enable row level security;
 alter table public.messages enable row level security;
 
 -- Personne ne peut se promouvoir agent depuis l'application.
-revoke update (est_agent) on public.profiles from authenticated;
+--
+-- Attention au piege : un `revoke` sur la seule colonne `est_agent` ne fait
+-- RIEN tant que le role detient `update` sur la table entiere -- ce que
+-- Supabase accorde par defaut. PostgreSQL fait primer le droit de table sur
+-- le droit de colonne. Il faut donc retirer le droit global, puis ne
+-- re-accorder que les colonnes qu'un utilisateur a le droit de modifier.
+--
+-- Sans cela, n'importe quel client peut passer `est_agent` a true et lire
+-- les dossiers, CNI et NIU de tout le monde.
+revoke update on public.profiles from anon, authenticated;
+grant update (role, nom, prenom, telephone, niu)
+  on public.profiles to authenticated;
 
 -- Profils ---------------------------------------------------------------------
 drop policy if exists "profil lisible par son propriétaire ou un agent" on public.profiles;
