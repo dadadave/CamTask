@@ -34,7 +34,8 @@ Git : `env.json` est ignoré.
 
 1. Créer un projet sur [supabase.com](https://supabase.com).
 2. *SQL Editor* : exécuter [`../supabase/schema.sql`](../supabase/schema.sql)
-   en entier. Le script est idempotent, on peut le relancer.
+   puis [`../supabase/schema_agents.sql`](../supabase/schema_agents.sql), en
+   entier. Les deux scripts sont idempotents, on peut les relancer.
 3. *Authentication → Providers → Email* : **désactiver « Confirm email »**.
    Sinon `signUp` ne rend aucune session et l'utilisateur doit valider son
    email avant de pouvoir se connecter.
@@ -44,7 +45,7 @@ Vérifications :
 
 ```bash
 flutter analyze                  # aucun problème attendu
-flutter test                     # 8 tests, sans réseau
+flutter test                     # 14 tests, sans réseau
 ```
 
 Les tests n'appellent pas Supabase : `AppState` accepte un `Backend`
@@ -77,8 +78,40 @@ Un compte est obligatoire pour accéder aux services (`RequiertCompte` dans
 
 Le mot de passe est demandé aux deux profils : l'authentification Supabase en
 exige un pour chaque compte. Cocher « Personne employée » ne donne aucun
-privilège — le droit de consulter les dossiers des clients vient de
-`profiles.est_agent`, qui se règle depuis le tableau de bord.
+privilège — c'est un **type de client**, pas un compte d'équipe.
+
+## Espace conseiller
+
+Le droit de voir les dossiers de tout le monde vient de `profiles.est_agent`,
+qui ne se règle que depuis le tableau de bord :
+
+```sql
+update public.profiles set est_agent = true
+ where id = (select id from auth.users where email = 'vous@cam-taxe.cm');
+```
+
+À la connexion, chacun va chez soi : un client sur `/accueil`, un conseiller
+sur `/agent/dossiers`. La barre de navigation change en conséquence — pas
+d'« Accueil » ni de « Services » pour un conseiller, ces écrans servant à
+déposer une demande en tant que client.
+
+| Écran | Ce qu'on y fait |
+| --- | --- |
+| `pages/agent_dossiers.dart` | Tous les dossiers, filtrables par statut |
+| `pages/agent_dossier.dart` | Le détail : pièces du client, avancement, envoi d'un document |
+| `pages/agent_conversations.dart` | Les conversations, celles en attente d'abord |
+| `pages/agent_chat.dart` | Répondre au nom de l'agence, joindre un document |
+
+Un conseiller fait avancer un dossier (*Envoyée* → *En cours* → *Traitée*) et
+peut y déposer des documents en retour — attestation, rapport, reçu. Ceux-ci
+sont rangés **sous l'identifiant du client**, faute de quoi la policy de
+lecture l'empêcherait de les rouvrir.
+
+`ReserveAgent` (dans `main.dart`) évite de montrer ces écrans à un client,
+mais ce n'est qu'un garde-fou d'affichage : le droit réel est tenu par la
+RLS. Un client qui forcerait la route ne verrait de toute façon que ses
+propres données. L'application décide de ce qu'elle montre, jamais de ce qui
+est permis.
 
 ## Structure
 
@@ -94,6 +127,8 @@ lib/
   supabase_config.dart    coordonnées du projet, lues au build
   widgets/                briques d'interface partagées et illustrations
     envoi_demande.dart    le mixin d'envoi commun aux 7 services
+    conversation.dart     bulle et barre de saisie, client comme conseiller
+    document.dart         ouvrir une pièce du bucket privé, choisir un fichier
   pages/                  un fichier par écran
   theme.dart              charte graphique
 ```
@@ -109,7 +144,7 @@ implémentation et de changer la ligne d'export de `lib/api/api.dart`.
 | Compte, session, profil | **Supabase** (`auth` + table `profiles`) |
 | Demandes des 7 services | **Supabase** (table `demandes`) |
 | Pièces jointes | **Supabase Storage**, bucket privé `pieces` |
-| Messagerie | appareil, avec une réponse d'agent simulée |
+| Messagerie | **Supabase** (table `messages`, temps réel) |
 
 La session est rétablie au lancement et survit au redémarrage : c'est
 `supabase_flutter` qui conserve le jeton. Les demandes sont relues à
@@ -125,10 +160,8 @@ la voit avec ses pièces manquantes plutôt qu'elle ne se perde en silence. En
 cas d'erreur, l'écran de service reste affiché — la saisie et les fichiers
 déjà choisis ne sont pas perdus.
 
-Restent à brancher : la messagerie temps réel (le schéma la sert déjà telle
-quelle, avec `messages` publiée sur `supabase_realtime`), un espace
-conseiller pour les comptes `est_agent`, et le paiement de caution — qui
-demande un secret côté serveur, donc une Edge Function.
+Reste à brancher : le paiement de la caution d'audit, qui demande un secret
+côté serveur — donc une Edge Function.
 
 ## Charte
 

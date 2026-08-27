@@ -15,6 +15,8 @@ dependencies:
   shared_preferences: ^2.3.2
   # Authentification, base de donnees et stockage (voir supabase/schema.sql)
   supabase_flutter: ^2.17.2
+  # Ouvrir un document depuis son lien signe
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

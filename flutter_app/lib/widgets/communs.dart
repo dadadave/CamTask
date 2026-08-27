@@ -774,3 +774,47 @@ class SelecteurTheme extends StatelessWidget {
     );
   }
 }
+
+/// L'état d'un dossier, d'un coup d'œil.
+///
+/// Une couleur par état : ce qui vient d'arriver appelle l'attention, ce qui
+/// est traité s'efface. Partagé par le profil du client et la liste du
+/// conseiller, pour que les deux parlent le même langage.
+class EtiquetteStatut extends StatelessWidget {
+  const EtiquetteStatut({super.key, required this.statut});
+
+  final String statut;
+
+  @override
+  Widget build(BuildContext context) {
+    final (accent, fond) = switch (statut) {
+      'En cours' => (Palette.bleuFonce, context.cl.bleuFantome),
+      'Traitée' => (Palette.succes, context.cl.succesFantome),
+      _ => (Palette.orange, context.cl.orangeFantome),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: fond, borderRadius: Rayons.brPilule),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            statut,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

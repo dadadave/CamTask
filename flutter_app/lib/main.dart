@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'pages/accueil.dart';
+import 'pages/agent_chat.dart';
+import 'pages/agent_conversations.dart';
+import 'pages/agent_dossier.dart';
+import 'pages/agent_dossiers.dart';
 import 'pages/audit.dart';
 import 'pages/auth.dart';
 import 'pages/chat.dart';
@@ -70,13 +74,28 @@ class MonComptable extends StatelessWidget {
         theme: construireTheme(),
         darkTheme: construireThemeSombre(),
         themeMode: etat.themeMode,
-        initialRoute: '/accueil',
+        // Un conseiller n'a que faire de l'accueil client : il ouvre
+        // directement ses dossiers.
+        initialRoute: etat.routeAccueil,
         routes: {
           '/accueil': (_) => const PageAccueil(),
           '/auth': (_) => const PageAuth(),
           '/services': (_) => const PageServices(),
           '/chat': (_) => const PageChat(),
           '/profil': (_) => const PageProfil(),
+
+          // Espace conseiller. L'accès n'est pas gardé ici : la RLS ne
+          // servirait rien de plus à un client qui forcerait la route.
+          '/agent/dossiers': (_) => const ReserveAgent(
+                child: PageAgentDossiers(),
+              ),
+          '/agent/dossier': (_) => const ReserveAgent(
+                child: PageAgentDossier(),
+              ),
+          '/agent/conversations': (_) => const ReserveAgent(
+                child: PageAgentConversations(),
+              ),
+          '/agent/chat': (_) => const ReserveAgent(child: PageAgentChat()),
 
           // Les services exigent un compte.
           '/service/conseil-fiscal': (_) =>
@@ -243,6 +262,83 @@ class EcranNonConfigure extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Écran réservé aux conseillers.
+///
+/// C'est un garde-fou d'affichage, pas une sécurité : le droit réel est tenu
+/// par la RLS, et un client qui atteindrait ces routes n'y verrait de toute
+/// façon que ses propres données. On évite simplement de lui montrer une
+/// interface qui ne le concerne pas.
+class ReserveAgent extends StatelessWidget {
+  const ReserveAgent({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final etat = PorteeApp.of(context);
+    if (etat.estAgent) return child;
+
+    return Scaffold(
+      appBar: const BarreDegrade(titre: 'Espace conseiller'),
+      body: Center(
+        child: Container(
+          margin: const EdgeInsets.all(Espaces.xl),
+          padding: const EdgeInsets.all(Espaces.xxl),
+          decoration: BoxDecoration(
+            color: context.cl.carte,
+            borderRadius: Rayons.brXl,
+            boxShadow: context.cl.ombreCarte,
+            border: Border.all(color: context.cl.ligne),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: context.cl.orangeFantome,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.badge_outlined,
+                    size: 31, color: Palette.orange),
+              ),
+              const SizedBox(height: Espaces.xl),
+              const Text(
+                'Réservé aux conseillers',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: Espaces.sm),
+              Text(
+                "Cet espace est celui de l'équipe CAM-TAXE. Si vous êtes "
+                'conseiller, demandez votre habilitation.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.55,
+                  color: context.cl.encreDouce,
+                ),
+              ),
+              const SizedBox(height: Espaces.xl),
+              BoutonEnvoyer(
+                bloc: true,
+                libelle: "Retour à l'accueil",
+                icone: Icons.arrow_forward_rounded,
+                onTap: () => Navigator.of(context)
+                    .pushNamedAndRemoveUntil('/accueil', (r) => false),
+              ),
+            ],
           ),
         ),
       ),

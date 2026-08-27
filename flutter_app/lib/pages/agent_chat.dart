@@ -5,38 +5,72 @@ import '../models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/conversation.dart';
-import '../widgets/coquille.dart';
 import '../widgets/document.dart';
 
-class PageChat extends StatefulWidget {
-  const PageChat({super.key});
+/// La conversation d'un client, côté conseiller.
+///
+/// L'écran reçoit en argument de route le client concerné. Rien n'est
+/// vérifié ici : la RLS refuse de servir la conversation d'autrui à qui
+/// n'est pas agent, et le refus s'affiche comme un message d'erreur.
+class PageAgentChat extends StatefulWidget {
+  const PageAgentChat({super.key});
 
   @override
-  State<PageChat> createState() => _PageChatState();
+  State<PageAgentChat> createState() => _PageAgentChatState();
 }
 
-class _PageChatState extends State<PageChat> {
+class _PageAgentChatState extends State<PageAgentChat> {
   final _saisie = TextEditingController();
   final _defilement = ScrollController();
-  bool _sujetApplique = false;
+
+  List<Message> _messages = [];
+  bool _charge = false;
   bool _envoi = false;
   String _erreur = '';
+  Annulation? _ecoute;
+
+  String _clientId = '';
+  String _clientNom = '';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_charge) return;
+    _charge = true;
+
+    final args = ModalRoute.of(context)?.settings.arguments
+        as ({String clientId, String clientNom})?;
+    if (args == null) return;
+    _clientId = args.clientId;
+    _clientNom = args.clientNom;
+    _ouvrir();
+  }
 
   @override
   void dispose() {
+    _ecoute?.call();
     _saisie.dispose();
     _defilement.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_sujetApplique) return;
-    _sujetApplique = true;
-    // Le sujet vient de l'écran de service d'où l'on arrive.
-    final sujet = ModalRoute.of(context)?.settings.arguments as String?;
-    if (sujet != null) _saisie.text = 'Bonjour, au sujet de « $sujet » : ';
+  Future<void> _ouvrir() async {
+    final etat = PorteeApp.of(context);
+    try {
+      final liste = await etat.messagesDe(_clientId);
+      if (!mounted) return;
+      setState(() => _messages = liste);
+      _versLeBas();
+
+      // Le client peut écrire pendant qu'on lit : on reste à l'écoute.
+      _ecoute = etat.ecouterConversation(_clientId, (m) {
+        if (!mounted) return;
+        setState(() => _messages = [..._messages, m]);
+        _versLeBas();
+      });
+    } on ErreurBackend catch (e) {
+      if (mounted) setState(() => _erreur = e.message);
+    }
   }
 
   void _versLeBas() {
@@ -61,11 +95,13 @@ class _PageChatState extends State<PageChat> {
     });
     final etat = PorteeApp.of(context);
     try {
-      await etat.envoyerMessage(
+      final message = await etat.repondre(
+        _clientId,
         texte.isEmpty ? 'Document joint' : texte,
         fichier: fichier,
       );
       if (!mounted) return;
+      setState(() => _messages = [..._messages, message]);
       _saisie.clear();
       _versLeBas();
     } on ErreurBackend catch (e) {
@@ -83,9 +119,6 @@ class _PageChatState extends State<PageChat> {
 
   @override
   Widget build(BuildContext context) {
-    final etat = PorteeApp.of(context);
-    _versLeBas();
-
     return Scaffold(
       backgroundColor: context.cl.fondDoux,
       body: Column(
@@ -102,26 +135,38 @@ class _PageChatState extends State<PageChat> {
               ),
             ),
           Expanded(
-            child: etat.messages.isEmpty
-                ? _accueil()
+            child: _messages.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(Espaces.xxl),
+                      child: Text(
+                        'Aucun message dans cette conversation.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          color: context.cl.encreDouce,
+                        ),
+                      ),
+                    ),
+                  )
                 : ListView.builder(
                     controller: _defilement,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 16),
-                    itemCount: etat.messages.length,
+                    itemCount: _messages.length,
                     itemBuilder: (context, i) =>
-                        BulleMessage(message: etat.messages[i]),
+                        BulleMessage(message: _messages[i]),
                   ),
           ),
           BarreSaisieMessage(
             saisie: _saisie,
             enCours: _envoi,
+            invite: 'Répondre à $_clientNom…',
             onEnvoyer: _envoyer,
             onJoindre: _joindre,
           ),
         ],
       ),
-      bottomNavigationBar: const NavigationBasse(routeCourante: '/chat'),
     );
   }
 
@@ -139,9 +184,7 @@ class _PageChatState extends State<PageChat> {
             children: [
               IconButton(
                 icon: const Icon(Icons.chevron_left, color: Colors.white),
-                onPressed: () => Navigator.of(context).canPop()
-                    ? Navigator.of(context).pop()
-                    : Navigator.of(context).pushNamed('/accueil'),
+                onPressed: () => Navigator.of(context).pop(),
               ),
               Container(
                 width: 40,
@@ -151,9 +194,9 @@ class _PageChatState extends State<PageChat> {
                   color: Palette.bleuFonce,
                   shape: BoxShape.circle,
                 ),
-                child: const Text(
-                  'J',
-                  style: TextStyle(
+                child: Text(
+                  _clientNom.isEmpty ? 'C' : _clientNom[0].toUpperCase(),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
@@ -165,9 +208,11 @@ class _PageChatState extends State<PageChat> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Judicaël',
-                      style: TextStyle(
+                    Text(
+                      _clientNom,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16.5,
                         fontWeight: FontWeight.w700,
@@ -175,78 +220,20 @@ class _PageChatState extends State<PageChat> {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            color: Palette.succes,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'En ligne',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'Vous répondez au nom de CAM-TAXE',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.more_vert, color: Colors.white),
               const SizedBox(width: 8),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  /// Conversation vide.
-  ///
-  /// L'accueil est présenté comme un écran, non comme un message : il ne
-  /// vient de personne, et le faire passer pour un mot de Judicaël serait
-  /// mentir au client sur ce qui l'attend.
-  Widget _accueil() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(Espaces.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: context.cl.bleuFantome,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.forum_outlined,
-                  size: 29, color: Palette.bleuFonce),
-            ),
-            const SizedBox(height: Espaces.lg),
-            const Text(
-              'Posez votre question',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: Espaces.sm),
-            Text(
-              'Un conseiller CAM-TAXE vous répond : déclaration, NIU/ACF, '
-              'DSF, audit ou contentieux fiscal.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.55,
-                color: context.cl.encreDouce,
-              ),
-            ),
-          ],
         ),
       ),
     );

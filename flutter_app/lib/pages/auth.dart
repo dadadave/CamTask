@@ -139,7 +139,10 @@ class _PageAuthState extends State<PageAuth> {
   void _terminer(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
-    Navigator.of(context).pushNamedAndRemoveUntil('/accueil', (r) => false);
+    // Chacun chez soi : un conseiller atterrit sur ses dossiers, un client
+    // sur l'accueil des services.
+    final route = PorteeApp.of(context).routeAccueil;
+    Navigator.of(context).pushNamedAndRemoveUntil(route, (r) => false);
   }
 
   @override

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../state/app_state.dart';
 import '../theme.dart';
 
-/// Onglets de la navigation basse, dans l'ordre des maquettes.
-const _onglets = <({String route, String libelle, IconData icone, IconData plein})>[
+typedef _Onglets = ({String route, String libelle, IconData icone, IconData plein});
+
+/// Onglets du client, dans l'ordre des maquettes.
+const _ongletsClient = <_Onglets>[
   (
     route: '/accueil',
     libelle: 'Accueil',
@@ -30,6 +33,32 @@ const _onglets = <({String route, String libelle, IconData icone, IconData plein
   ),
 ];
 
+/// Onglets du conseiller.
+///
+/// Pas d'« Accueil » ni de « Services » ici : ces écrans servent à déposer
+/// une demande en tant que client, ce qu'un conseiller n'a pas à faire
+/// depuis son poste.
+const _ongletsAgent = <_Onglets>[
+  (
+    route: '/agent/dossiers',
+    libelle: 'Dossiers',
+    icone: Icons.folder_outlined,
+    plein: Icons.folder_rounded
+  ),
+  (
+    route: '/agent/conversations',
+    libelle: 'Messages',
+    icone: Icons.forum_outlined,
+    plein: Icons.forum_rounded
+  ),
+  (
+    route: '/profil',
+    libelle: 'Profil',
+    icone: Icons.person_outline_rounded,
+    plein: Icons.person_rounded
+  ),
+];
+
 /// Navigation basse : barre blanche surélevée, onglet actif marqué par une
 /// pastille orange animée.
 class NavigationBasse extends StatelessWidget {
@@ -39,6 +68,9 @@ class NavigationBasse extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onglets =
+        PorteeApp.of(context).estAgent ? _ongletsAgent : _ongletsClient;
+
     return Container(
       decoration: BoxDecoration(
         color: context.cl.carte,
@@ -53,7 +85,7 @@ class NavigationBasse extends StatelessWidget {
           height: 68,
           child: Row(
             children: [
-              for (final o in _onglets)
+              for (final o in onglets)
                 Expanded(
                   child: _Onglet(
                     libelle: o.libelle,

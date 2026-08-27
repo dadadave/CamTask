@@ -52,6 +52,72 @@ class _BackendFactice implements Backend {
   @override
   Future<void> deconnexion() async => session = null;
 
+  /* -- Messagerie ------------------------------------------------------- */
+
+  final List<Message> messages = [];
+
+  @override
+  Future<List<Message>> listerMessages({String? clientId}) async =>
+      List.of(messages);
+
+  @override
+  Future<Message> envoyerMessage({
+    required String texte,
+    FichierChoisi? fichier,
+    String? clientId,
+  }) async {
+    final m = Message(
+      id: 'message-${messages.length}',
+      auteur: Auteur.moi,
+      texte: texte,
+      fichier: fichier?.nom,
+      heure: '09:00',
+    );
+    messages.add(m);
+    return m;
+  }
+
+  @override
+  Annulation souscrireMessages({
+    required void Function(Message) surMessage,
+    String? clientId,
+  }) =>
+      () {};
+
+  @override
+  Future<List<Conversation>> listerConversations() async => const [];
+
+  /* -- Espace conseiller ------------------------------------------------ */
+
+  @override
+  Future<void> changerStatut(String demandeId, String statut) async {
+    for (var i = 0; i < demandes.length; i++) {
+      if (demandes[i].id == demandeId) {
+        demandes[i] = demandes[i].avec(statut: statut);
+      }
+    }
+  }
+
+  @override
+  Future<List<Piece>> deposerPiecesAgence({
+    required String demandeId,
+    required String clientId,
+    required List<PieceEnvoi> pieces,
+  }) async =>
+      [
+        for (final p in pieces)
+          Piece(
+            libelle: p.libelle,
+            fichier: p.fichier.nom,
+            sens: SensPiece.agence,
+            chemin: '$clientId/$demandeId/${p.fichier.nom}',
+          ),
+      ];
+
+  @override
+  Future<String> lienDocument(String chemin) async =>
+      'https://exemple.test/$chemin';
+
   @override
   Future<List<Demande>> listerDemandes() async => List.of(demandes);
 
@@ -79,14 +145,47 @@ class _BackendFactice implements Backend {
   }
 }
 
+final _compteAgent = Compte(
+  role: Role.utilisateur,
+  nom: 'MBALLA',
+  prenom: 'Judicael',
+  email: 'conseiller@cam-taxe.cm',
+  telephone: '699000333',
+  niu: '',
+  pieces: const [],
+  creeLe: AppState.dateDuJour(),
+  estAgent: true,
+);
+
+/// Un dossier deja depose par un client, tel qu'un conseiller le voit.
+final _dossierClient = Demande(
+  id: 'dossier-1',
+  serviceId: 'audit',
+  serviceLibelle: 'Faire un audit',
+  resume: 'Audit fiscal — NIU P123',
+  pieces: const [
+    Piece(libelle: 'Photo de la CNI', fichier: 'cni.jpg', chemin: 'u/d/cni.jpg'),
+  ],
+  statut: 'Envoyée',
+  date: '01/01/2026',
+  clientId: 'client-1',
+  clientNom: 'Bout TEST',
+  clientTelephone: '699000222',
+);
+
 /// [connecte] ouvre d'emblee une session, comme au retour d'un lancement
 /// ou l'utilisateur s'etait deja identifie.
-Future<AppState> _etatNeuf({bool connecte = false}) async {
+Future<AppState> _etatNeuf({
+  bool connecte = false,
+  bool agent = false,
+  List<Demande> dossiers = const [],
+}) async {
   SharedPreferences.setMockInitialValues({});
-  final etat = AppState(
-    backendInjecte: _BackendFactice(session: connecte ? _compteFactice : null),
-    configure: true,
+  final faux = _BackendFactice(
+    session: agent ? _compteAgent : (connecte ? _compteFactice : null),
   );
+  faux.demandes.addAll(dossiers);
+  final etat = AppState(backendInjecte: faux, configure: true);
   await etat.charger();
   return etat;
 }
@@ -193,7 +292,73 @@ void main() {
     expect(find.text('Envoyée'), findsOneWidget);
   });
 
+  _testsAgent();
   _testsTheme();
+}
+
+/// Un conseiller n'ouvre pas la meme application qu'un client : c'est le
+/// point le plus facile a casser en touchant a la navigation.
+void _testsAgent() {
+  testWidgets("un conseiller arrive sur ses dossiers, pas sur l'accueil",
+      (tester) async {
+    final etat = await _etatNeuf(agent: true, dossiers: [_dossierClient]);
+    expect(etat.routeAccueil, '/agent/dossiers');
+
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dossiers'), findsWidgets);
+    expect(find.text('Faites vos déclarations chez nous'), findsNothing);
+  });
+
+  testWidgets("un client arrive sur l'accueil", (tester) async {
+    final etat = await _etatNeuf(connecte: true);
+    expect(etat.routeAccueil, '/accueil');
+    expect(etat.estAgent, isFalse);
+  });
+
+  testWidgets('le conseiller voit le dossier et son client', (tester) async {
+    final etat = await _etatNeuf(agent: true, dossiers: [_dossierClient]);
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Faire un audit'), findsOneWidget);
+    expect(find.text('Bout TEST'), findsOneWidget);
+    expect(find.text('Envoyée'), findsOneWidget);
+  });
+
+  testWidgets('le filtre par statut masque les autres dossiers',
+      (tester) async {
+    final etat = await _etatNeuf(agent: true, dossiers: [_dossierClient]);
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Traitée (0)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Faire un audit'), findsNothing);
+    expect(find.textContaining('Aucun dossier'), findsOneWidget);
+  });
+
+  testWidgets('le conseiller fait avancer un dossier', (tester) async {
+    final etat = await _etatNeuf(agent: true, dossiers: [_dossierClient]);
+    await etat.changerStatut('dossier-1', 'En cours');
+
+    expect(etat.demandes.single.statut, 'En cours');
+  });
+
+  testWidgets('un client qui force la route conseiller ne voit rien',
+      (tester) async {
+    final etat = await _etatNeuf(connecte: true);
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+
+    final navigateur = tester.state<NavigatorState>(find.byType(Navigator));
+    navigateur.pushNamed('/agent/dossiers');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Réservé aux conseillers'), findsOneWidget);
+  });
 }
 
 /// Le thème sombre doit se construire et se rendre sans casse : c'est là
