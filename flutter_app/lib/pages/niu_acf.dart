@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models.dart';
-import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
+import '../widgets/envoi_demande.dart';
 import '../widgets/coquille.dart';
 
 /// L'utilisateur choisit le NIU, l'ACF, ou les deux.
@@ -42,10 +42,10 @@ class PageNiuAcf extends StatefulWidget {
   State<PageNiuAcf> createState() => _PageNiuAcfState();
 }
 
-class _PageNiuAcfState extends State<PageNiuAcf> {
+class _PageNiuAcfState extends State<PageNiuAcf> with EnvoiDemande {
   final _demarchesChoisies = <String>[];
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  final _fichiers = <String, FichierChoisi>{};
 
   // Bloc NIU
   final _telephone = TextEditingController();
@@ -66,7 +66,7 @@ class _PageNiuAcfState extends State<PageNiuAcf> {
     super.dispose();
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     if (_demarchesChoisies.isEmpty) {
       setState(() => _erreur = 'Choisissez le NIU, l’ACF, ou les deux.');
       return;
@@ -88,7 +88,7 @@ class _PageNiuAcfState extends State<PageNiuAcf> {
       return;
     }
 
-    PorteeApp.of(context).envoyerDemande(
+    await envoyerDemande(
       serviceId: 'niu-acf',
       serviceLibelle: 'Acquérir son ${_demarchesChoisies.join(' / ')}',
       resume: [
@@ -99,15 +99,11 @@ class _PageNiuAcfState extends State<PageNiuAcf> {
       ].join('\n'),
       pieces: [
         for (final e in _fichiers.entries)
-          Piece(libelle: e.key, fichier: e.value),
+          PieceEnvoi(libelle: e.key, fichier: e.value),
       ],
+      confirmation: 'Demande envoyée. Un agent traite votre dossier.',
+      surErreur: (m) => setState(() => _erreur = m),
     );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Demande envoyée. Un agent traite votre dossier.'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
   }
 
   @override
@@ -208,7 +204,10 @@ class _PageNiuAcfState extends State<PageNiuAcf> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoiDemande(
+                enCours: envoiEnCours,
+                enfant: BoutonEnvoyer(onTap: _envoyer),
+              ),
             ],
           ),
         ),

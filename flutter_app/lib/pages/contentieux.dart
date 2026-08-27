@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models.dart';
-import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
+import '../widgets/envoi_demande.dart';
 import '../widgets/coquille.dart';
 
 /// Pièces justificatives que l'utilisateur peut joindre à son contentieux.
@@ -20,11 +20,11 @@ class PageContentieux extends StatefulWidget {
   State<PageContentieux> createState() => _PageContentieuxState();
 }
 
-class _PageContentieuxState extends State<PageContentieux> {
+class _PageContentieuxState extends State<PageContentieux> with EnvoiDemande {
   final _niu = TextEditingController();
   final _prejudice = TextEditingController();
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  final _fichiers = <String, FichierChoisi>{};
 
   @override
   void dispose() {
@@ -33,28 +33,24 @@ class _PageContentieuxState extends State<PageContentieux> {
     super.dispose();
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     if (_prejudice.text.trim().isEmpty) {
       setState(() => _erreur = 'Décrivez la nature du préjudice subi.');
       return;
     }
 
-    PorteeApp.of(context).envoyerDemande(
+    await envoyerDemande(
       serviceId: 'contentieux',
       serviceLibelle: 'Contentieux fiscal',
       resume: '${_niu.text.trim().isEmpty ? '' : 'NIU ${_niu.text} — '}'
           'Préjudice : ${_prejudice.text.trim()}',
       pieces: [
         for (final e in _fichiers.entries)
-          Piece(libelle: e.key, fichier: e.value),
+          PieceEnvoi(libelle: e.key, fichier: e.value),
       ],
+      confirmation: 'Votre contentieux a été transmis à un conseiller.',
+      surErreur: (m) => setState(() => _erreur = m),
     );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Votre contentieux a été transmis à un conseiller.'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
   }
 
   @override
@@ -112,7 +108,10 @@ class _PageContentieuxState extends State<PageContentieux> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoiDemande(
+                enCours: envoiEnCours,
+                enfant: BoutonEnvoyer(onTap: _envoyer),
+              ),
             ],
           ),
         ),

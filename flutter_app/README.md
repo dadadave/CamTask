@@ -47,7 +47,7 @@ flutter analyze                  # aucun problème attendu
 flutter test                     # 8 tests, sans réseau
 ```
 
-Les tests n'appellent pas Supabase : `AppState` accepte un `BackendAuth`
+Les tests n'appellent pas Supabase : `AppState` accepte un `Backend`
 factice et un indicateur `configure`, ce que `test/widget_test.dart` utilise.
 
 ## Les 7 services
@@ -85,19 +85,20 @@ privilège — le droit de consulter les dossiers des clients vient de
 ```
 lib/
   api/
-    backend.dart          l'interface BackendAuth + ErreurBackend
-    supabase_auth.dart    son implémentation Supabase
+    backend.dart          l'interface Backend + ErreurBackend
+    supabase_backend.dart son implémentation Supabase
     api.dart              le point de bascule (une seule ligne à changer)
   data/                   contenus éditoriaux (services, conseil fiscal, audit, DSF)
   models.dart             compte, demande, pièce, message
   state/                  état de l'application (ChangeNotifier + InheritedNotifier)
   supabase_config.dart    coordonnées du projet, lues au build
   widgets/                briques d'interface partagées et illustrations
+    envoi_demande.dart    le mixin d'envoi commun aux 7 services
   pages/                  un fichier par écran
   theme.dart              charte graphique
 ```
 
-Les écrans ne connaissent pas Supabase : ils ne parlent qu'à `BackendAuth`.
+Les écrans ne connaissent pas Supabase : ils ne parlent qu'à `Backend`.
 Le jour où notre propre API prend le relais, il suffit d'en écrire une autre
 implémentation et de changer la ligne d'export de `lib/api/api.dart`.
 
@@ -106,17 +107,28 @@ implémentation et de changer la ligne d'export de `lib/api/api.dart`.
 | | Où |
 | --- | --- |
 | Compte, session, profil | **Supabase** (`auth` + table `profiles`) |
-| Demandes | appareil, via `shared_preferences` |
+| Demandes des 7 services | **Supabase** (table `demandes`) |
+| Pièces jointes | **Supabase Storage**, bucket privé `pieces` |
 | Messagerie | appareil, avec une réponse d'agent simulée |
-| Pièces téléversées | nom du fichier seulement, sur l'appareil |
 
 La session est rétablie au lancement et survit au redémarrage : c'est
-`supabase_flutter` qui conserve le jeton.
+`supabase_flutter` qui conserve le jeton. Les demandes sont relues à
+l'ouverture du profil, ce qui fait apparaître les changements de statut
+décidés par un conseiller.
 
-Restent à brancher : l'envoi réel des documents vers le bucket privé
-`pieces`, les demandes et la messagerie temps réel (le schéma les sert déjà
-tels quels), et le paiement de caution — qui demande un secret côté serveur,
-donc une Edge Function.
+Les documents partent réellement dans le bucket, rangés sous
+`<user_id>/<demande_id>/…` — c'est ce chemin que vérifie la policy de
+stockage. Les pièces de l'inscription vont sous `<user_id>/compte/…`.
+
+Si un téléversement échoue, la demande est déjà enregistrée : le conseiller
+la voit avec ses pièces manquantes plutôt qu'elle ne se perde en silence. En
+cas d'erreur, l'écran de service reste affiché — la saisie et les fichiers
+déjà choisis ne sont pas perdus.
+
+Restent à brancher : la messagerie temps réel (le schéma la sert déjà telle
+quelle, avec `messages` publiée sur `supabase_realtime`), un espace
+conseiller pour les comptes `est_agent`, et le paiement de caution — qui
+demande un secret côté serveur, donc une Edge Function.
 
 ## Charte
 

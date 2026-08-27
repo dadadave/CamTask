@@ -25,29 +25,24 @@ const _messageAccueil = Message(
 
 /// État de l'application.
 ///
-/// Le compte et la session viennent de Supabase ([backendAuth]) ; les
-/// demandes, la messagerie et le mode d'affichage restent pour l'instant
-/// dans les préférences locales de l'appareil.
+/// Le compte, les demandes et les pièces vivent dans Supabase ; seuls la
+/// messagerie et le mode d'affichage restent pour l'instant dans les
+/// préférences locales de l'appareil.
 class AppState extends ChangeNotifier {
-  /// [backend] et [configure] ne sont renseignés que par les tests, qui
-  /// n'ont ni projet Supabase ni réseau. En production, les valeurs par
+  /// [backendInjecte] et [configure] ne sont renseignés que par les tests,
+  /// qui n'ont ni projet Supabase ni réseau. En production, les valeurs par
   /// défaut sont celles de `api.dart` et de `supabase_config.dart`.
-  AppState({BackendAuth? backend, bool? configure})
-      : _backend = backend ?? backendAuth,
+  AppState({Backend? backendInjecte, bool? configure})
+      : _backend = backendInjecte ?? backend,
         _configure = configure ?? supabaseConfigure;
 
-  final BackendAuth _backend;
+  final Backend _backend;
   final bool _configure;
 
   Compte? _compte;
   ModeTheme _mode = ModeTheme.systeme;
   List<Demande> _demandes = [];
   List<Message> _messages = [_messageAccueil];
-
-  /// Pièces fournies à l'inscription. Leur téléversement vers le bucket
-  /// privé n'est pas encore branché : on n'en conserve que le nom de
-  /// fichier, d'où cette liste tenue à part du profil Supabase.
-  List<Piece> _piecesCompte = [];
 
   SharedPreferences? _prefs;
   String _erreurDemarrage = '';
@@ -91,6 +86,21 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Recharge les demandes depuis le serveur.
+  ///
+  /// Un échec ne vide pas la liste déjà affichée : mieux vaut des données
+  /// d'il y a une minute qu'un écran vide au premier hoquet de réseau.
+  Future<void> rafraichirDemandes() async {
+    if (!_configure || _compte == null) return;
+    try {
+      _demandes = await _backend.listerDemandes();
+      _erreurDemarrage = '';
+    } on ErreurBackend catch (e) {
+      _erreurDemarrage = e.message;
+    }
+    notifyListeners();
+  }
+
   void _lireLocal() {
     final brut = _prefs?.getString(_cle);
     if (brut == null) return;
@@ -100,12 +110,6 @@ class AppState extends ChangeNotifier {
         (m) => m.name == j['mode'],
         orElse: () => ModeTheme.systeme,
       );
-      _demandes = ((j['demandes'] as List<dynamic>?) ?? const [])
-          .map((e) => Demande.depuisJson(e as Map<String, dynamic>))
-          .toList();
-      _piecesCompte = ((j['piecesCompte'] as List<dynamic>?) ?? const [])
-          .map((e) => Piece.depuisJson(e as Map<String, dynamic>))
-          .toList();
       final msgs = ((j['messages'] as List<dynamic>?) ?? const [])
           .map((e) => Message.depuisJson(e as Map<String, dynamic>))
           .toList();
@@ -122,7 +126,8 @@ class AppState extends ChangeNotifier {
   Future<void> _retablirSession() async {
     if (!_configure) return;
     try {
-      _compte = await _backend.sessionActuelle(pieces: _piecesCompte);
+      _compte = await _backend.sessionActuelle();
+      if (_compte != null) _demandes = await _backend.listerDemandes();
     } on ErreurBackend catch (e) {
       _compte = null;
       _erreurDemarrage = e.message;
@@ -134,9 +139,7 @@ class AppState extends ChangeNotifier {
       _cle,
       jsonEncode({
         'mode': _mode.name,
-        'demandes': _demandes.map((d) => d.versJson()).toList(),
         'messages': _messages.map((m) => m.versJson()).toList(),
-        'piecesCompte': _piecesCompte.map((p) => p.versJson()).toList(),
       }),
     );
   }
@@ -148,6 +151,7 @@ class AppState extends ChangeNotifier {
   /// Lève une [ErreurBackend] dont le message est affichable tel quel.
   Future<void> connexion(String email, String motDePasse) async {
     _compte = await _backend.connexion(email, motDePasse);
+    _demandes = await _backend.listerDemandes();
     _erreurDemarrage = '';
     notifyListeners();
   }
@@ -161,7 +165,7 @@ class AppState extends ChangeNotifier {
     required String telephone,
     required String niu,
     required String motDePasse,
-    List<Piece> pieces = const [],
+    List<PieceEnvoi> pieces = const [],
   }) async {
     _compte = await _backend.inscription(
       role: role,
@@ -173,10 +177,9 @@ class AppState extends ChangeNotifier {
       motDePasse: motDePasse,
       pieces: pieces,
     );
-    _piecesCompte = pieces;
+    _demandes = [];
     _erreurDemarrage = '';
     notifyListeners();
-    await _sauver();
   }
 
   Future<void> seDeconnecter() async {
@@ -188,14 +191,13 @@ class AppState extends ChangeNotifier {
       // Sans réseau, le jeton local est tout de même effacé par signOut.
     } finally {
       _compte = null;
-      _piecesCompte = [];
+      _demandes = [];
       notifyListeners();
-      await _sauver();
     }
   }
 
   /* ---------------------------------------------------------------------- */
-  /*  Demandes et messagerie (stockage local)                               */
+  /*  Demandes (Supabase) et messagerie (stockage local)                    */
   /* ---------------------------------------------------------------------- */
 
   static String _identifiant() {
@@ -215,24 +217,24 @@ class AppState extends ChangeNotifier {
         '${n.month.toString().padLeft(2, '0')}/${n.year}';
   }
 
-  Demande envoyerDemande({
+  /// Enregistre la demande sur le serveur et dépose ses pièces jointes.
+  ///
+  /// Lève une [ErreurBackend] dont le message est affichable tel quel : la
+  /// page appelante reste affichée et la saisie n'est pas perdue.
+  Future<Demande> envoyerDemande({
     required String serviceId,
     required String serviceLibelle,
     required String resume,
-    List<Piece> pieces = const [],
-  }) {
-    final demande = Demande(
-      id: _identifiant(),
+    List<PieceEnvoi> pieces = const [],
+  }) async {
+    final demande = await _backend.creerDemande(
       serviceId: serviceId,
       serviceLibelle: serviceLibelle,
       resume: resume,
       pieces: pieces,
-      statut: 'Envoyée',
-      date: dateDuJour(),
     );
     _demandes = [demande, ..._demandes];
     notifyListeners();
-    _sauver();
     return demande;
   }
 

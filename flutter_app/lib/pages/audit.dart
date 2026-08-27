@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../data/audit.dart';
 import '../models.dart';
-import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
+import '../widgets/envoi_demande.dart';
 import '../widgets/coquille.dart';
 
 const _operateurs = <String>[
@@ -20,13 +20,13 @@ class PageAudit extends StatefulWidget {
   State<PageAudit> createState() => _PageAuditState();
 }
 
-class _PageAuditState extends State<PageAudit> {
+class _PageAuditState extends State<PageAudit> with EnvoiDemande {
   final _structure = TextEditingController();
   final _niu = TextEditingController();
   final _telephone = TextEditingController();
   String? _type;
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  final _fichiers = <String, FichierChoisi>{};
 
   // Paiement de la caution
   bool _paiementOuvert = false;
@@ -57,7 +57,7 @@ class _PageAuditState extends State<PageAudit> {
     );
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final manquants = <String>[
       if (_structure.text.trim().isEmpty) 'Nom de la structure',
       if (_type == null) "Type d'audit",
@@ -71,22 +71,18 @@ class _PageAuditState extends State<PageAudit> {
 
     final pieces = [
       for (final e in _fichiers.entries)
-        Piece(libelle: e.key, fichier: e.value),
+        PieceEnvoi(libelle: e.key, fichier: e.value),
     ];
-    PorteeApp.of(context).envoyerDemande(
+    await envoyerDemande(
       serviceId: 'audit',
       serviceLibelle: 'Faire un audit',
       resume: '$_type — ${_structure.text} — NIU ${_niu.text} — '
           'caution réglée ($_operateur)',
       pieces: pieces,
+      confirmation: "Demande d'audit envoyée "
+            '(${pieces.length} document(s)).',
+      surErreur: (m) => setState(() => _erreur = m),
     );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Demande d'audit envoyée "
-            '(${pieces.length} document(s)).'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
   }
 
   @override
@@ -212,7 +208,10 @@ class _PageAuditState extends State<PageAudit> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoiDemande(
+                enCours: envoiEnCours,
+                enfant: BoutonEnvoyer(onTap: _envoyer),
+              ),
             ],
           ),
         ),

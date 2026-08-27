@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models.dart';
-import '../state/app_state.dart';
 import '../widgets/communs.dart';
+import '../widgets/envoi_demande.dart';
 import '../widgets/coquille.dart';
 
 const _pieces = <String>[
@@ -17,10 +17,10 @@ class PageDarp extends StatefulWidget {
   State<PageDarp> createState() => _PageDarpState();
 }
 
-class _PageDarpState extends State<PageDarp> {
+class _PageDarpState extends State<PageDarp> with EnvoiDemande {
   final _niu = TextEditingController();
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  final _fichiers = <String, FichierChoisi>{};
 
   @override
   void dispose() {
@@ -28,7 +28,7 @@ class _PageDarpState extends State<PageDarp> {
     super.dispose();
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final manquants = <String>[
       if (_niu.text.trim().isEmpty) 'NIU ou numéro de contribuable',
       ..._pieces.where((p) => !_fichiers.containsKey(p)),
@@ -38,20 +38,18 @@ class _PageDarpState extends State<PageDarp> {
       return;
     }
 
-    PorteeApp.of(context).envoyerDemande(
+    await envoyerDemande(
       serviceId: 'darp',
       serviceLibelle: 'DARP/IRPP',
       resume: 'Déclaration annuelle des revenus des particuliers — '
           'NIU ${_niu.text}',
       pieces: [
         for (final e in _fichiers.entries)
-          Piece(libelle: e.key, fichier: e.value),
+          PieceEnvoi(libelle: e.key, fichier: e.value),
       ],
+      confirmation: 'DARP/IRPP transmise à nos services.',
+      surErreur: (m) => setState(() => _erreur = m),
     );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('DARP/IRPP transmise à nos services.')),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
   }
 
   @override
@@ -85,7 +83,10 @@ class _PageDarpState extends State<PageDarp> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoiDemande(
+                enCours: envoiEnCours,
+                enfant: BoutonEnvoyer(onTap: _envoyer),
+              ),
             ],
           ),
         ),

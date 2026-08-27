@@ -1,5 +1,30 @@
+import 'dart:typed_data';
+
 /// Rôle choisi à l'inscription : client ou personne employée.
 enum Role { utilisateur, employe }
+
+/// Un fichier choisi sur l'appareil, contenu compris.
+///
+/// On garde les octets plutôt qu'un chemin : c'est la seule forme qui
+/// fonctionne aussi bien sur mobile que sur le web, et le téléversement
+/// Supabase les prend directement.
+class FichierChoisi {
+  const FichierChoisi({required this.nom, required this.octets});
+
+  final String nom;
+  final Uint8List octets;
+}
+
+/// Une pièce prête à partir : son libellé et le fichier choisi.
+///
+/// À distinguer de [Piece], qui décrit une pièce **déjà** déposée et dont on
+/// n'affiche plus que le nom.
+class PieceEnvoi {
+  const PieceEnvoi({required this.libelle, required this.fichier});
+
+  final String libelle;
+  final FichierChoisi fichier;
+}
 
 /// Un document téléversé (on ne conserve que le nom du fichier).
 class Piece {

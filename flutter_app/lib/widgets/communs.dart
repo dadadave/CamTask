@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import 'illustrations.dart';
@@ -265,13 +266,19 @@ class Televersement extends StatelessWidget {
   });
 
   final String libelle;
-  final String? fichier;
-  final ValueChanged<String> onChoisi;
+  final FichierChoisi? fichier;
+  final ValueChanged<FichierChoisi> onChoisi;
 
+  /// `withData: true` : on récupère le contenu, pas seulement un chemin.
+  /// C'est ce qui permet de téléverser le document pour de vrai, et la
+  /// seule forme qui marche aussi sur le web.
   Future<void> _choisir() async {
-    final res = await FilePicker.platform.pickFiles(withData: false);
+    final res = await FilePicker.platform.pickFiles(withData: true);
     if (res == null || res.files.isEmpty) return;
-    onChoisi(res.files.first.name);
+    final f = res.files.first;
+    final octets = f.bytes;
+    if (octets == null) return;
+    onChoisi(FichierChoisi(nom: f.name, octets: octets));
   }
 
   @override
@@ -326,7 +333,7 @@ class Televersement extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      choisi ? fichier! : 'Appuyez pour choisir un fichier',
+                      choisi ? fichier!.nom : 'Appuyez pour choisir un fichier',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models.dart';
-import '../state/app_state.dart';
 import '../widgets/communs.dart';
+import '../widgets/envoi_demande.dart';
 import '../widgets/coquille.dart';
 
 const _typesImpots = <String>[
@@ -31,13 +31,13 @@ class PageDeclarer extends StatefulWidget {
   State<PageDeclarer> createState() => _PageDeclarerState();
 }
 
-class _PageDeclarerState extends State<PageDeclarer> {
+class _PageDeclarerState extends State<PageDeclarer> with EnvoiDemande {
   final _niu = TextEditingController();
   final _montant = TextEditingController();
   final _nature = TextEditingController();
   String? _type;
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  final _fichiers = <String, FichierChoisi>{};
 
   @override
   void dispose() {
@@ -47,7 +47,7 @@ class _PageDeclarerState extends State<PageDeclarer> {
     super.dispose();
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final manquants = <String>[
       if (_niu.text.trim().isEmpty) 'NIU',
       if (_type == null) "Type d'impôts",
@@ -59,22 +59,18 @@ class _PageDeclarerState extends State<PageDeclarer> {
       return;
     }
 
-    PorteeApp.of(context).envoyerDemande(
+    await envoyerDemande(
       serviceId: 'declarer',
       serviceLibelle: 'Declarer et payer vos impots',
       resume: 'NIU ${_niu.text} — $_type — ${_montant.text} FCFA — '
           'Activité : ${_nature.text}',
       pieces: [
         for (final e in _fichiers.entries)
-          Piece(libelle: e.key, fichier: e.value),
+          PieceEnvoi(libelle: e.key, fichier: e.value),
       ],
+      confirmation: 'Déclaration transmise. Un agent valide le montant à payer.',
+      surErreur: (m) => setState(() => _erreur = m),
     );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Déclaration transmise. Un agent valide le montant à payer.'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
   }
 
   @override
@@ -118,7 +114,10 @@ class _PageDeclarerState extends State<PageDeclarer> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoiDemande(
+                enCours: envoiEnCours,
+                enfant: BoutonEnvoyer(onTap: _envoyer),
+              ),
             ],
           ),
         ),

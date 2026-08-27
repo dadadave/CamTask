@@ -20,14 +20,17 @@ final _compteFactice = Compte(
 );
 
 /// Back-end en memoire : les tests n'ont ni projet Supabase ni reseau.
-class _BackendFactice implements BackendAuth {
+///
+/// Les demandes creees restent dans [demandes], ce qui suffit a verifier
+/// qu'un envoi remonte bien jusqu'au profil.
+class _BackendFactice implements Backend {
   _BackendFactice({this.session});
 
   Compte? session;
+  final List<Demande> demandes = [];
 
   @override
-  Future<Compte?> sessionActuelle({List<Piece> pieces = const []}) async =>
-      session;
+  Future<Compte?> sessionActuelle() async => session;
 
   @override
   Future<Compte> connexion(String email, String motDePasse) async =>
@@ -42,12 +45,38 @@ class _BackendFactice implements BackendAuth {
     required String telephone,
     required String niu,
     required String motDePasse,
-    List<Piece> pieces = const [],
+    List<PieceEnvoi> pieces = const [],
   }) async =>
       session = _compteFactice;
 
   @override
   Future<void> deconnexion() async => session = null;
+
+  @override
+  Future<List<Demande>> listerDemandes() async => List.of(demandes);
+
+  @override
+  Future<Demande> creerDemande({
+    required String serviceId,
+    required String serviceLibelle,
+    required String resume,
+    List<PieceEnvoi> pieces = const [],
+  }) async {
+    final demande = Demande(
+      id: 'demande-${demandes.length}',
+      serviceId: serviceId,
+      serviceLibelle: serviceLibelle,
+      resume: resume,
+      pieces: [
+        for (final p in pieces)
+          Piece(libelle: p.libelle, fichier: p.fichier.nom),
+      ],
+      statut: 'Envoyée',
+      date: AppState.dateDuJour(),
+    );
+    demandes.insert(0, demande);
+    return demande;
+  }
 }
 
 /// [connecte] ouvre d'emblee une session, comme au retour d'un lancement
@@ -55,7 +84,7 @@ class _BackendFactice implements BackendAuth {
 Future<AppState> _etatNeuf({bool connecte = false}) async {
   SharedPreferences.setMockInitialValues({});
   final etat = AppState(
-    backend: _BackendFactice(session: connecte ? _compteFactice : null),
+    backendInjecte: _BackendFactice(session: connecte ? _compteFactice : null),
     configure: true,
   );
   await etat.charger();
@@ -142,7 +171,7 @@ void main() {
 
   testWidgets('une demande envoyée apparaît dans le profil', (tester) async {
     final etat = await _etatNeuf(connecte: true);
-    etat.envoyerDemande(
+    await etat.envoyerDemande(
       serviceId: 'dsf',
       serviceLibelle: 'DSF — Déclaration statistique et fiscale',
       resume: 'NIU P123 — DSF pour la banque',

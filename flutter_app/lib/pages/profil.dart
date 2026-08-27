@@ -6,8 +6,23 @@ import '../theme.dart';
 import '../widgets/communs.dart';
 import '../widgets/coquille.dart';
 
-class PageProfil extends StatelessWidget {
+class PageProfil extends StatefulWidget {
   const PageProfil({super.key});
+
+  @override
+  State<PageProfil> createState() => _PageProfilState();
+}
+
+class _PageProfilState extends State<PageProfil> {
+  @override
+  void initState() {
+    super.initState();
+    // Le statut d'un dossier est décidé par nos services, pas par le client :
+    // sans cette relecture, un passage en « Traitée » ne se verrait jamais.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) PorteeApp.of(context).rafraichirDemandes();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

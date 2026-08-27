@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../data/conseil.dart';
-import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
+import '../widgets/envoi_demande.dart';
 import '../widgets/coquille.dart';
 
 class PageConseilFiscal extends StatefulWidget {
@@ -13,7 +13,7 @@ class PageConseilFiscal extends StatefulWidget {
   State<PageConseilFiscal> createState() => _PageConseilFiscalState();
 }
 
-class _PageConseilFiscalState extends State<PageConseilFiscal> {
+class _PageConseilFiscalState extends State<PageConseilFiscal> with EnvoiDemande {
   String? _ouverte;
   final _choix = <String>{};
   bool _autreOuvert = false;
@@ -32,7 +32,7 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
             if (_choix.contains(s.id)) s.titre,
       ];
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final titres = _titresChoisis();
     final message = _message.text.trim();
     if (titres.isEmpty && message.isEmpty) {
@@ -41,22 +41,17 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
       return;
     }
 
-    PorteeApp.of(context).envoyerDemande(
+    await envoyerDemande(
       serviceId: 'conseil',
       serviceLibelle: 'Besoin de conseil fiscale',
       resume: [
         if (titres.isNotEmpty) 'Préoccupations : ${titres.join(' • ')}',
         if (message.isNotEmpty) 'Autre préoccupation : $message',
       ].join('\n'),
+      confirmation: 'Votre demande de conseil a été envoyée. '
+            'Un conseiller vous répond sous peu.',
+      surErreur: (m) => setState(() => _erreur = m),
     );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Votre demande de conseil a été envoyée. '
-            'Un conseiller vous répond sous peu.'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
   }
 
   @override
@@ -82,7 +77,10 @@ class _PageConseilFiscalState extends State<PageConseilFiscal> {
         Padding(
           padding: const EdgeInsets.only(bottom: 18),
           child: Center(
-            child: BoutonEnvoyer(onTap: _envoyer),
+            child: BoutonEnvoiDemande(
+                enCours: envoiEnCours,
+                enfant: BoutonEnvoyer(onTap: _envoyer),
+              ),
           ),
         ),
         Encadre(

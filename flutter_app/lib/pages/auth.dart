@@ -36,7 +36,7 @@ class _PageAuthState extends State<PageAuth> {
   /// ce qui évite aussi une double inscription sur double appui.
   bool _envoi = false;
 
-  final _fichiers = <String, String>{};
+  final _fichiers = <String, FichierChoisi>{};
 
   final _nom = TextEditingController();
   final _prenom = TextEditingController();
@@ -56,9 +56,9 @@ class _PageAuthState extends State<PageAuth> {
   List<String> get _piecesRequises =>
       _role == Role.utilisateur ? _piecesUtilisateur : _piecesEmploye;
 
-  List<Piece> get _pieces => [
+  List<PieceEnvoi> get _pieces => [
         for (final e in _fichiers.entries)
-          Piece(libelle: e.key, fichier: e.value),
+          PieceEnvoi(libelle: e.key, fichier: e.value),
       ];
 
   /// Exécute [action] en montrant l'attente, puis navigue — ou affiche le

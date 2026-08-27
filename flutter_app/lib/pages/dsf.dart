@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../data/dsf.dart';
 import '../models.dart';
-import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
+import '../widgets/envoi_demande.dart';
 import '../widgets/coquille.dart';
 
 class PageDsf extends StatefulWidget {
@@ -14,12 +14,12 @@ class PageDsf extends StatefulWidget {
   State<PageDsf> createState() => _PageDsfState();
 }
 
-class _PageDsfState extends State<PageDsf> {
+class _PageDsfState extends State<PageDsf> with EnvoiDemande {
   final _niu = TextEditingController();
   final _entreprise = TextEditingController();
   String _destination = '';
   String _erreur = '';
-  final _fichiers = <String, String>{};
+  final _fichiers = <String, FichierChoisi>{};
 
   @override
   void dispose() {
@@ -28,7 +28,7 @@ class _PageDsfState extends State<PageDsf> {
     super.dispose();
   }
 
-  void _envoyer() {
+  Future<void> _envoyer() async {
     final manquants = <String>[
       if (_niu.text.trim().isEmpty) 'NIU',
       if (_destination.isEmpty) 'DSF pour impôt ou pour la banque',
@@ -42,20 +42,16 @@ class _PageDsfState extends State<PageDsf> {
 
     final pieces = [
       for (final e in _fichiers.entries)
-        Piece(libelle: e.key, fichier: e.value),
+        PieceEnvoi(libelle: e.key, fichier: e.value),
     ];
-    PorteeApp.of(context).envoyerDemande(
+    await envoyerDemande(
       serviceId: 'dsf',
       serviceLibelle: 'DSF — Déclaration statistique et fiscale',
       resume: 'NIU ${_niu.text} — $_destination — ${_entreprise.text}',
       pieces: pieces,
+      confirmation: 'DSF transmise (${pieces.length} pièce(s) jointe(s)).',
+      surErreur: (m) => setState(() => _erreur = m),
     );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('DSF transmise (${pieces.length} pièce(s) jointe(s)).'),
-      ),
-    );
-    Navigator.of(context).pushNamedAndRemoveUntil('/profil', (r) => false);
   }
 
   @override
@@ -131,7 +127,10 @@ class _PageDsfState extends State<PageDsf> {
                 TexteErreur(texte: _erreur),
                 const SizedBox(height: 14),
               ],
-              BoutonEnvoyer(onTap: _envoyer),
+              BoutonEnvoiDemande(
+                enCours: envoiEnCours,
+                enfant: BoutonEnvoyer(onTap: _envoyer),
+              ),
             ],
           ),
         ),

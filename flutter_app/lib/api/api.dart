@@ -1,16 +1,16 @@
 import 'backend.dart';
-import 'supabase_auth.dart';
+import 'supabase_backend.dart';
 
 export 'backend.dart';
-export 'supabase_auth.dart' show AuthSupabase;
+export 'supabase_backend.dart' show BackendSupabase;
 
 /// Point de bascule unique.
 ///
 /// Supabase nous sert de back-end pour cette première version. Le jour où
 /// notre propre API prend le relais, il suffit d'écrire une autre
-/// implémentation de [BackendAuth] et de changer cette seule ligne :
+/// implémentation de [Backend] et de changer cette seule ligne :
 ///
-///     const BackendAuth backendAuth = AuthRest();
+///     const Backend backend = BackendRest();
 ///
 /// Aucun écran n'a à être touché.
-const BackendAuth backendAuth = AuthSupabase();
+const Backend backend = BackendSupabase();
