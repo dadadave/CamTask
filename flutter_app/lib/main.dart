@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'pages/accueil.dart';
+import 'pages/admin_equipe.dart';
 import 'pages/agent_chat.dart';
 import 'pages/agent_conversations.dart';
 import 'pages/agent_dossier.dart';
@@ -96,6 +97,9 @@ class MonComptable extends StatelessWidget {
                 child: PageAgentConversations(),
               ),
           '/agent/chat': (_) => const ReserveAgent(child: PageAgentChat()),
+
+          // Administration des habilitations.
+          '/admin/equipe': (_) => const ReserveAdmin(child: PageAdminEquipe()),
 
           // Les services exigent un compte.
           '/service/conseil-fiscal': (_) =>
@@ -337,6 +341,82 @@ class ReserveAgent extends StatelessWidget {
                 icone: Icons.arrow_forward_rounded,
                 onTap: () => Navigator.of(context)
                     .pushNamedAndRemoveUntil('/accueil', (r) => false),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Écran réservé aux administrateurs.
+///
+/// Garde-fou d'affichage, comme [ReserveAgent] : le droit réel est tenu par
+/// la base, qui refuse de servir la liste des comptes et rejette toute
+/// nomination ne venant pas d'un admin.
+class ReserveAdmin extends StatelessWidget {
+  const ReserveAdmin({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final etat = PorteeApp.of(context);
+    if (etat.estAdmin) return child;
+
+    return Scaffold(
+      appBar: const BarreDegrade(titre: 'Équipe'),
+      body: Center(
+        child: Container(
+          margin: const EdgeInsets.all(Espaces.xl),
+          padding: const EdgeInsets.all(Espaces.xxl),
+          decoration: BoxDecoration(
+            color: context.cl.carte,
+            borderRadius: Rayons.brXl,
+            boxShadow: context.cl.ombreCarte,
+            border: Border.all(color: context.cl.ligne),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: context.cl.orangeFantome,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.admin_panel_settings_outlined,
+                    size: 31, color: Palette.orange),
+              ),
+              const SizedBox(height: Espaces.xl),
+              const Text(
+                'Réservé aux administrateurs',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: Espaces.sm),
+              Text(
+                "Seul un administrateur nomme les conseillers. Ce statut se "
+                'règle depuis le tableau de bord.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.55,
+                  color: context.cl.encreDouce,
+                ),
+              ),
+              const SizedBox(height: Espaces.xl),
+              BoutonEnvoyer(
+                bloc: true,
+                libelle: 'Retour',
+                icone: Icons.arrow_forward_rounded,
+                onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                    PorteeApp.of(context).routeAccueil, (r) => false),
               ),
             ],
           ),

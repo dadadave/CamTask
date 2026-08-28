@@ -33,6 +33,23 @@ const _ongletsClient = <_Onglets>[
   ),
 ];
 
+/// Onglets d'un administrateur qui n'est pas conseiller : il ne gère que
+/// les habilitations, il n'a ni dossiers ni conversations à traiter.
+const _ongletsAdmin = <_Onglets>[
+  (
+    route: '/admin/equipe',
+    libelle: 'Équipe',
+    icone: Icons.groups_outlined,
+    plein: Icons.groups_rounded
+  ),
+  (
+    route: '/profil',
+    libelle: 'Profil',
+    icone: Icons.person_outline_rounded,
+    plein: Icons.person_rounded
+  ),
+];
+
 /// Onglets du conseiller.
 ///
 /// Pas d'« Accueil » ni de « Services » ici : ces écrans servent à déposer
@@ -68,8 +85,12 @@ class NavigationBasse extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final onglets =
-        PorteeApp.of(context).estAgent ? _ongletsAgent : _ongletsClient;
+    final etat = PorteeApp.of(context);
+    final onglets = etat.estAgent
+        ? _ongletsAgent
+        : etat.estAdmin
+            ? _ongletsAdmin
+            : _ongletsClient;
 
     return Container(
       decoration: BoxDecoration(

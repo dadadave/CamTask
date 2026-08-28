@@ -61,6 +61,11 @@ class BackendSupabase implements Backend {
       return 'Connexion au serveur impossible. Vérifiez votre accès à '
           'Internet.';
     }
+    if (m.contains('seul un administrateur') ||
+        m.contains('votre propre habilitation') ||
+        m.contains('compte introuvable')) {
+      return message; // Déjà rédigé en français par la base.
+    }
     if (m.contains('row-level security') || m.contains('violates row-level')) {
       return "Vous n'avez pas l'autorisation d'effectuer cette action.";
     }
@@ -260,11 +265,12 @@ class BackendSupabase implements Backend {
   Future<Compte> _compteDepuisProfil(String uid, String email) async {
     final ligne = await _client
         .from('profiles')
-        .select('role, nom, prenom, telephone, niu, est_agent, cree_le')
+        .select('role, nom, prenom, telephone, niu, est_agent, est_admin, cree_le')
         .eq('id', uid)
         .single();
 
     return Compte(
+      id: uid,
       role: Role.values.firstWhere(
         (r) => r.name == ligne['role'],
         orElse: () => Role.utilisateur,
@@ -275,6 +281,7 @@ class BackendSupabase implements Backend {
       telephone: ligne['telephone'] as String? ?? '',
       niu: ligne['niu'] as String? ?? '',
       estAgent: ligne['est_agent'] as bool? ?? false,
+      estAdmin: ligne['est_admin'] as bool? ?? false,
       pieces: await _piecesDuCompte(uid),
       creeLe: _dateFr(ligne['cree_le'] as String?),
     );
@@ -623,6 +630,45 @@ class BackendSupabase implements Backend {
           return 0;
         });
       return liste;
+    });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /*  Administration des habilitations                                      */
+  /* ---------------------------------------------------------------------- */
+
+  @override
+  Future<List<MembreEquipe>> listerComptes() {
+    return _garder(() async {
+      // La RLS ne sert cette liste qu'a un agent ou un admin ; un client n'y
+      // verrait que sa propre ligne.
+      final lignes = await _client
+          .from('profiles')
+          .select('id, nom, prenom, telephone, est_agent, est_admin')
+          .order('est_agent', ascending: false)
+          .order('nom', ascending: true);
+
+      return [
+        for (final l in lignes)
+          MembreEquipe(
+            id: l['id'] as String? ?? '',
+            nom: l['nom'] as String? ?? '',
+            prenom: l['prenom'] as String? ?? '',
+            telephone: l['telephone'] as String? ?? '',
+            estAgent: l['est_agent'] as bool? ?? false,
+            estAdmin: l['est_admin'] as bool? ?? false,
+          ),
+      ];
+    });
+  }
+
+  @override
+  Future<void> nommerConseiller(String compteId, bool conseiller) {
+    return _garder(() async {
+      await _client.rpc('nommer_conseiller', params: {
+        'cible': compteId,
+        'conseiller': conseiller,
+      });
     });
   }
 

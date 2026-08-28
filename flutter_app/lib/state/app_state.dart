@@ -52,8 +52,18 @@ class AppState extends ChangeNotifier {
   /// l'affichage d'un écran conseiller ne verrait rien de plus.
   bool get estAgent => _compte?.estAgent ?? false;
 
+  /// Administrateur : nomme les conseillers, sans voir les dossiers.
+  bool get estAdmin => _compte?.estAdmin ?? false;
+
   /// La route d'accueil de la personne connectée.
-  String get routeAccueil => estAgent ? '/agent/dossiers' : '/accueil';
+  ///
+  /// Un admin qui n'est pas conseiller n'a rien à faire sur les dossiers :
+  /// la RLS ne lui en servirait aucun. On l'envoie directement sur l'équipe.
+  String get routeAccueil {
+    if (estAgent) return '/agent/dossiers';
+    if (estAdmin) return '/admin/equipe';
+    return '/accueil';
+  }
 
   /// Les coordonnées du projet Supabase sont-elles présentes ?
   bool get configure => _configure;
@@ -315,6 +325,19 @@ class AppState extends ChangeNotifier {
     void Function(Message) surMessage,
   ) =>
       _backend.souscrireMessages(surMessage: surMessage, clientId: clientId);
+
+  /* ---------------------------------------------------------------------- */
+  /*  Administration des habilitations                                      */
+  /* ---------------------------------------------------------------------- */
+
+  Future<List<MembreEquipe>> comptes() => _backend.listerComptes();
+
+  /// Donne ou retire l'habilitation de conseiller.
+  ///
+  /// La base refuse si l'appelant n'est pas administrateur, ou s'il vise sa
+  /// propre ligne ; le refus remonte en [ErreurBackend] affichable.
+  Future<void> nommerConseiller(String compteId, bool conseiller) =>
+      _backend.nommerConseiller(compteId, conseiller);
 
   /* ---------------------------------------------------------------------- */
   /*  Documents                                                             */

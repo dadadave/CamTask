@@ -9,6 +9,7 @@ import 'package:mon_comptable/state/app_state.dart';
 import 'package:mon_comptable/theme.dart';
 
 final _compteFactice = Compte(
+  id: 'client-1',
   role: Role.utilisateur,
   nom: 'NGUEMA',
   prenom: 'Judicael',
@@ -118,6 +119,63 @@ class _BackendFactice implements Backend {
   Future<String> lienDocument(String chemin) async =>
       'https://exemple.test/$chemin';
 
+  /* -- Administration --------------------------------------------------- */
+
+  final List<MembreEquipe> comptes = [
+    const MembreEquipe(
+      id: 'client-1',
+      nom: 'NGUEMA',
+      prenom: 'Judicael',
+      telephone: '699000111',
+      estAgent: false,
+      estAdmin: false,
+    ),
+    const MembreEquipe(
+      id: 'agent-1',
+      nom: 'MBALLA',
+      prenom: 'Judicael',
+      telephone: '699000333',
+      estAgent: true,
+      estAdmin: false,
+    ),
+    const MembreEquipe(
+      id: 'admin-1',
+      nom: 'ETOUNDI',
+      prenom: 'Patronne',
+      telephone: '699000444',
+      estAgent: false,
+      estAdmin: true,
+    ),
+  ];
+
+  @override
+  Future<List<MembreEquipe>> listerComptes() async {
+    // La base ne sert cette liste qu'a un agent ou un admin.
+    if (!(session?.estAgent ?? false) && !(session?.estAdmin ?? false)) {
+      throw const ErreurBackend(
+          "Vous n'avez pas l'autorisation d'effectuer cette action.");
+    }
+    return List.of(comptes);
+  }
+
+  @override
+  Future<void> nommerConseiller(String compteId, bool conseiller) async {
+    // On rejoue les deux garde-fous de la fonction `nommer_conseiller`.
+    if (!(session?.estAdmin ?? false)) {
+      throw const ErreurBackend(
+          'Seul un administrateur peut nommer un conseiller');
+    }
+    if (compteId == session?.id) {
+      throw const ErreurBackend(
+          'Vous ne pouvez pas modifier votre propre habilitation');
+    }
+    for (var i = 0; i < comptes.length; i++) {
+      if (comptes[i].id == compteId) {
+        comptes[i] = comptes[i].avec(estAgent: conseiller);
+      }
+    }
+  }
+
   @override
   Future<List<Demande>> listerDemandes() async => List.of(demandes);
 
@@ -146,6 +204,7 @@ class _BackendFactice implements Backend {
 }
 
 final _compteAgent = Compte(
+  id: 'agent-1',
   role: Role.utilisateur,
   nom: 'MBALLA',
   prenom: 'Judicael',
@@ -157,13 +216,26 @@ final _compteAgent = Compte(
   estAgent: true,
 );
 
+final _compteAdmin = Compte(
+  id: 'admin-1',
+  role: Role.utilisateur,
+  nom: 'ETOUNDI',
+  prenom: 'Patronne',
+  email: 'admin@cam-taxe.cm',
+  telephone: '699000444',
+  niu: '',
+  pieces: const [],
+  creeLe: AppState.dateDuJour(),
+  estAdmin: true,
+);
+
 /// Un dossier deja depose par un client, tel qu'un conseiller le voit.
-final _dossierClient = Demande(
+const _dossierClient = Demande(
   id: 'dossier-1',
   serviceId: 'audit',
   serviceLibelle: 'Faire un audit',
   resume: 'Audit fiscal — NIU P123',
-  pieces: const [
+  pieces: [
     Piece(libelle: 'Photo de la CNI', fichier: 'cni.jpg', chemin: 'u/d/cni.jpg'),
   ],
   statut: 'Envoyée',
@@ -178,11 +250,16 @@ final _dossierClient = Demande(
 Future<AppState> _etatNeuf({
   bool connecte = false,
   bool agent = false,
+  bool admin = false,
   List<Demande> dossiers = const [],
 }) async {
   SharedPreferences.setMockInitialValues({});
   final faux = _BackendFactice(
-    session: agent ? _compteAgent : (connecte ? _compteFactice : null),
+    session: admin
+        ? _compteAdmin
+        : agent
+            ? _compteAgent
+            : (connecte ? _compteFactice : null),
   );
   faux.demandes.addAll(dossiers);
   final etat = AppState(backendInjecte: faux, configure: true);
@@ -293,7 +370,71 @@ void main() {
   });
 
   _testsAgent();
+  _testsAdmin();
   _testsTheme();
+}
+
+/// Nommer un conseiller donne acces aux dossiers de tous les clients : c'est
+/// le droit le plus sensible de l'application.
+void _testsAdmin() {
+  testWidgets('un admin arrive sur son equipe', (tester) async {
+    final etat = await _etatNeuf(admin: true);
+    expect(etat.estAdmin, isTrue);
+    expect(etat.estAgent, isFalse);
+    expect(etat.routeAccueil, '/admin/equipe');
+
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Équipe'), findsWidgets);
+    expect(find.text('Judicael NGUEMA'), findsOneWidget);
+  });
+
+  testWidgets('un admin nomme un conseiller', (tester) async {
+    final etat = await _etatNeuf(admin: true);
+    await etat.nommerConseiller('client-1', true);
+
+    final comptes = await etat.comptes();
+    expect(comptes.firstWhere((m) => m.id == 'client-1').estAgent, isTrue);
+  });
+
+  testWidgets('un conseiller ordinaire ne peut PAS nommer', (tester) async {
+    final etat = await _etatNeuf(agent: true);
+    await expectLater(
+      etat.nommerConseiller('client-1', true),
+      throwsA(isA<ErreurBackend>()),
+    );
+  });
+
+  testWidgets('un client ne peut PAS nommer', (tester) async {
+    final etat = await _etatNeuf(connecte: true);
+    await expectLater(
+      etat.nommerConseiller('client-1', true),
+      throwsA(isA<ErreurBackend>()),
+    );
+  });
+
+  testWidgets('un admin ne modifie pas sa propre habilitation',
+      (tester) async {
+    final etat = await _etatNeuf(admin: true);
+    await expectLater(
+      etat.nommerConseiller('admin-1', true),
+      throwsA(isA<ErreurBackend>()),
+    );
+  });
+
+  testWidgets('un client qui force la route equipe ne voit rien',
+      (tester) async {
+    final etat = await _etatNeuf(connecte: true);
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+
+    tester.state<NavigatorState>(find.byType(Navigator))
+        .pushNamed('/admin/equipe');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Réservé aux administrateurs'), findsOneWidget);
+  });
 }
 
 /// Un conseiller n'ouvre pas la meme application qu'un client : c'est le

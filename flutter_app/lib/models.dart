@@ -67,6 +67,7 @@ class Piece {
 
 class Compte {
   const Compte({
+    required this.id,
     required this.role,
     required this.nom,
     required this.prenom,
@@ -76,7 +77,12 @@ class Compte {
     required this.pieces,
     required this.creeLe,
     this.estAgent = false,
+    this.estAdmin = false,
   });
+
+  /// L'identifiant du compte dans `auth.users`. Sert notamment à ne pas
+  /// proposer à un admin de modifier sa propre habilitation.
+  final String id;
 
   final Role role;
   final String nom;
@@ -90,8 +96,14 @@ class Compte {
   final String creeLe;
 
   /// Conseiller CAM-TAXE : voit les dossiers et les conversations de tous
-  /// les clients. Ne se règle que depuis le tableau de bord Supabase.
+  /// les clients. Ne se règle que depuis le tableau de bord Supabase, ou
+  /// par un [estAdmin] depuis l'écran Équipe.
   final bool estAgent;
+
+  /// Administrateur : nomme les conseillers, et rien d'autre. Il ne voit ni
+  /// les dossiers ni les conversations, sauf s'il est aussi conseiller.
+  /// Ne se règle que depuis le tableau de bord.
+  final bool estAdmin;
 
   String get initiales {
     final a = prenom.isNotEmpty ? prenom[0] : '';
@@ -101,6 +113,7 @@ class Compte {
   }
 
   Map<String, dynamic> versJson() => {
+        'id': id,
         'role': role.name,
         'nom': nom,
         'prenom': prenom,
@@ -108,11 +121,13 @@ class Compte {
         'telephone': telephone,
         'niu': niu,
         'estAgent': estAgent,
+        'estAdmin': estAdmin,
         'pieces': pieces.map((p) => p.versJson()).toList(),
         'creeLe': creeLe,
       };
 
   factory Compte.depuisJson(Map<String, dynamic> j) => Compte(
+        id: j['id'] as String? ?? '',
         role: Role.values.firstWhere(
           (r) => r.name == j['role'],
           orElse: () => Role.utilisateur,
@@ -123,6 +138,7 @@ class Compte {
         telephone: j['telephone'] as String? ?? '',
         niu: j['niu'] as String? ?? '',
         estAgent: j['estAgent'] as bool? ?? false,
+        estAdmin: j['estAdmin'] as bool? ?? false,
         pieces: ((j['pieces'] as List<dynamic>?) ?? const [])
             .map((e) => Piece.depuisJson(e as Map<String, dynamic>))
             .toList(),
@@ -279,4 +295,47 @@ class Conversation {
         .join();
     return i.isEmpty ? 'C' : i;
   }
+}
+
+/// Un compte, vu depuis l'écran d'administration.
+///
+/// L'email n'y figure pas : il vit dans `auth.users`, que l'application ne
+/// lit pas. On identifie donc par le nom et le téléphone.
+class MembreEquipe {
+  const MembreEquipe({
+    required this.id,
+    required this.nom,
+    required this.prenom,
+    required this.telephone,
+    required this.estAgent,
+    required this.estAdmin,
+  });
+
+  final String id;
+  final String nom;
+  final String prenom;
+  final String telephone;
+  final bool estAgent;
+  final bool estAdmin;
+
+  String get nomComplet {
+    final n = '$prenom $nom'.trim();
+    return n.isEmpty ? 'Compte sans nom' : n;
+  }
+
+  String get initiales {
+    final a = prenom.isNotEmpty ? prenom[0] : '';
+    final b = nom.isNotEmpty ? nom[0] : '';
+    final i = '$a$b'.toUpperCase();
+    return i.isEmpty ? '?' : i;
+  }
+
+  MembreEquipe avec({bool? estAgent}) => MembreEquipe(
+        id: id,
+        nom: nom,
+        prenom: prenom,
+        telephone: telephone,
+        estAgent: estAgent ?? this.estAgent,
+        estAdmin: estAdmin,
+      );
 }

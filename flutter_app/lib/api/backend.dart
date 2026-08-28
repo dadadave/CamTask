@@ -111,6 +111,22 @@ abstract class Backend {
   Future<List<Conversation>> listerConversations();
 
   /* ---------------------------------------------------------------------- */
+  /*  Administration des habilitations                                      */
+  /* ---------------------------------------------------------------------- */
+
+  /// Tous les comptes, pour l'écran Équipe. Réservé aux administrateurs.
+  Future<List<MembreEquipe>> listerComptes();
+
+  /// Donne ou retire l'habilitation de conseiller.
+  ///
+  /// Passe par la fonction `nommer_conseiller` de la base, qui vérifie
+  /// elle-même que l'appelant est administrateur et qu'il ne modifie pas sa
+  /// propre ligne. La colonne `est_agent` reste inaccessible en écriture
+  /// depuis l'application : c'est ce qui empêche de rouvrir la faille où
+  /// n'importe qui se promouvait en modifiant son propre profil.
+  Future<void> nommerConseiller(String compteId, bool conseiller);
+
+  /* ---------------------------------------------------------------------- */
   /*  Documents                                                             */
   /* ---------------------------------------------------------------------- */
 

@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Indispensable : sans elle, un APK `release` n'a aucun acces reseau et
+         chaque appel a Supabase echoue par « Failed host lookup ». Flutter ne
+         la declare que dans les variantes debug et profile, pour le
+         rechargement a chaud ; la version installee, elle, passe par ici. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="mon_comptable"
         android:name="${applicationName}"

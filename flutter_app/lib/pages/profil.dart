@@ -295,6 +295,60 @@ class _PageProfilState extends State<PageProfil> {
         else
           for (final d in etat.demandes) _CarteDemande(demande: d),
 
+        // ── Équipe (administrateurs seulement) ────────────────────────
+        //  On ne nomme un conseiller qu'occasionnellement : cette entrée n'a
+        //  pas sa place dans la barre du bas, où elle prendrait la place
+        //  d'un écran ouvert tous les jours.
+        if (etat.estAdmin) ...[
+          const LibelleSection(texte: 'Équipe'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                Espaces.bord, Espaces.sm, Espaces.bord, 0),
+            child: Material(
+              color: context.cl.carte,
+              borderRadius: Rayons.brLg,
+              child: InkWell(
+                borderRadius: Rayons.brLg,
+                onTap: () =>
+                    Navigator.of(context).pushNamed('/admin/equipe'),
+                child: Container(
+                  padding: const EdgeInsets.all(Espaces.lg),
+                  decoration: BoxDecoration(
+                    borderRadius: Rayons.brLg,
+                    border: Border.all(color: context.cl.ligne),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: context.cl.orangeFantome,
+                          borderRadius: Rayons.r(10),
+                        ),
+                        child: const Icon(Icons.groups_outlined,
+                            size: 19, color: Palette.orange),
+                      ),
+                      const SizedBox(width: Espaces.md),
+                      const Expanded(
+                        child: Text(
+                          'Gérer les conseillers',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          color: context.cl.grise),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+
         // ── Déconnexion ───────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(
