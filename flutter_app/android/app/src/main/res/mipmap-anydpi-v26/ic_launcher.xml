@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icône adaptative : Android compose lui-même le fond et le premier plan,
+     puis les rogne selon la forme choisie par le constructeur (cercle,
+     goutte, écusson…). C'est ce qui évite le carré blanc des icônes
+     héritées sur les lanceurs récents. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground"/>
+</adaptive-icon>

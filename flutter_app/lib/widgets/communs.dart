@@ -90,7 +90,7 @@ class LibelleSection extends StatelessWidget {
             width: 3,
             height: 15,
             decoration: BoxDecoration(
-              color: Palette.orange,
+              color: context.cl.accentTexte,
               borderRadius: Rayons.r(2),
             ),
           ),
@@ -787,10 +787,12 @@ class EtiquetteStatut extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Les teintes d'écriture, pas celles de marque : sur fond clair,
+    // l'orange des aplats ne dépasse pas 2,46 de contraste.
     final (accent, fond) = switch (statut) {
-      'En cours' => (Palette.bleuFonce, context.cl.bleuFantome),
-      'Traitée' => (Palette.succes, context.cl.succesFantome),
-      _ => (Palette.orange, context.cl.orangeFantome),
+      'En cours' => (context.cl.bleuTexte, context.cl.bleuFantome),
+      'Traitée' => (context.cl.succesTexte, context.cl.succesFantome),
+      _ => (context.cl.accentTexte, context.cl.orangeFantome),
     };
 
     return Container(

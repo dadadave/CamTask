@@ -7,6 +7,21 @@ class Palette {
 
   static const orange = Color(0xFFF5893F);
   static const orangeClair = Color(0xFFFBA05C);
+
+  /// Orangés du dégradé des boutons. Plus profonds que [orange] : le blanc
+  /// posé dessus n'atteignait que 2,46 de contraste, sous le minimum de 3
+  /// exigé pour un texte de cette taille. Ceux-ci le portent à 3,05–3,98.
+  static const orangeProfond = Color(0xFFEC7014);
+  static const orangeBraise = Color(0xFFD25C0C);
+
+  /// Orange d'écriture sur fond clair. [orange] n'y offre que 2,46 de
+  /// contraste ; celui-ci atteint 4,52. Réservé au texte et aux icônes,
+  /// jamais aux aplats — la marque reste [orange].
+  static const orangeEncre = Color(0xFFB8500A);
+
+  /// Bleu et vert d'écriture sur fond clair, mêmes raisons.
+  static const bleuEncre = Color(0xFF0F76DC);
+  static const succesEncre = Color(0xFF358554);
   static const bleu = Color(0xFF5DA9F5);
   static const bleuFonce = Color(0xFF1E88F0);
   static const succes = Color(0xFF3F9E63);
@@ -54,13 +69,13 @@ class Degrades {
   static const orange = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Palette.orangeClair, Palette.orange],
+    colors: [Palette.orangeProfond, Palette.orangeBraise],
   );
 
   static const orangeVif = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
-    colors: [Palette.orange, Palette.orangeClair],
+    colors: [Palette.orangeBraise, Palette.orangeProfond],
   );
 
   static const bleu = LinearGradient(
@@ -95,6 +110,9 @@ class Nuances extends ThemeExtension<Nuances> {
     required this.orangeFantome,
     required this.bleuFantome,
     required this.succesFantome,
+    required this.accentTexte,
+    required this.bleuTexte,
+    required this.succesTexte,
     required this.ombreCarte,
     required this.ombreDouce,
     required this.ombreForte,
@@ -123,6 +141,16 @@ class Nuances extends ThemeExtension<Nuances> {
   final Color bleuFantome;
   final Color succesFantome;
 
+  /// Les mêmes couleurs, mais pour **écrire**.
+  ///
+  /// Sur fond clair il faut les assombrir : l'orange de marque n'offre que
+  /// 2,46 de contraste sur blanc, très en dessous des 4,5 nécessaires à un
+  /// texte courant. Sur fond sombre les teintes vives passent déjà, et on
+  /// les garde telles quelles.
+  final Color accentTexte;
+  final Color bleuTexte;
+  final Color succesTexte;
+
   final List<BoxShadow> ombreCarte;
   final List<BoxShadow> ombreDouce;
   final List<BoxShadow> ombreForte;
@@ -145,11 +173,14 @@ class Nuances extends ThemeExtension<Nuances> {
     fondDoux: Color(0xFFF7F3EF),
     encre: Color(0xFF10100F),
     encreDouce: Color(0xFF55524F),
-    grise: Color(0xFF9C948C),
+    grise: Color(0xFF726A62),
     ligne: Color(0xFFE3DCD4),
     orangeFantome: Color(0xFFFFF1E4),
     bleuFantome: Color(0xFFE8F2FE),
     succesFantome: Color(0xFFEAF6EF),
+    accentTexte: Palette.orangeEncre,
+    bleuTexte: Palette.bleuEncre,
+    succesTexte: Palette.succesEncre,
     ombreCarte: [
       BoxShadow(
         color: Color(0x14000000),
@@ -193,6 +224,9 @@ class Nuances extends ThemeExtension<Nuances> {
     orangeFantome: Color(0xFF3A2617),
     bleuFantome: Color(0xFF16283C),
     succesFantome: Color(0xFF17301F),
+    accentTexte: Palette.orangeSombre,
+    bleuTexte: Palette.bleu,
+    succesTexte: Palette.succes,
     // En sombre l'ombre portée ne se voit plus : on l'assombrit fortement
     // et la séparation vient surtout du contraste des surfaces.
     ombreCarte: [
@@ -235,6 +269,9 @@ class Nuances extends ThemeExtension<Nuances> {
     Color? orangeFantome,
     Color? bleuFantome,
     Color? succesFantome,
+    Color? accentTexte,
+    Color? bleuTexte,
+    Color? succesTexte,
     List<BoxShadow>? ombreCarte,
     List<BoxShadow>? ombreDouce,
     List<BoxShadow>? ombreForte,
@@ -252,6 +289,9 @@ class Nuances extends ThemeExtension<Nuances> {
       orangeFantome: orangeFantome ?? this.orangeFantome,
       bleuFantome: bleuFantome ?? this.bleuFantome,
       succesFantome: succesFantome ?? this.succesFantome,
+      accentTexte: accentTexte ?? this.accentTexte,
+      bleuTexte: bleuTexte ?? this.bleuTexte,
+      succesTexte: succesTexte ?? this.succesTexte,
       ombreCarte: ombreCarte ?? this.ombreCarte,
       ombreDouce: ombreDouce ?? this.ombreDouce,
       ombreForte: ombreForte ?? this.ombreForte,
@@ -274,6 +314,9 @@ class Nuances extends ThemeExtension<Nuances> {
       orangeFantome: Color.lerp(orangeFantome, autre.orangeFantome, t)!,
       bleuFantome: Color.lerp(bleuFantome, autre.bleuFantome, t)!,
       succesFantome: Color.lerp(succesFantome, autre.succesFantome, t)!,
+      accentTexte: Color.lerp(accentTexte, autre.accentTexte, t)!,
+      bleuTexte: Color.lerp(bleuTexte, autre.bleuTexte, t)!,
+      succesTexte: Color.lerp(succesTexte, autre.succesTexte, t)!,
       ombreCarte: t < 0.5 ? ombreCarte : autre.ombreCarte,
       ombreDouce: t < 0.5 ? ombreDouce : autre.ombreDouce,
       ombreForte: t < 0.5 ? ombreForte : autre.ombreForte,

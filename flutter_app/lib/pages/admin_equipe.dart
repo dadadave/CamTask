@@ -321,12 +321,12 @@ class _LigneMembre extends StatelessWidget {
                             color: context.cl.orangeFantome,
                             borderRadius: Rayons.brPilule,
                           ),
-                          child: const Text(
+                          child: Text(
                             'admin',
                             style: TextStyle(
                               fontSize: 9.5,
                               fontWeight: FontWeight.w800,
-                              color: Palette.orange,
+                              color: context.cl.accentTexte,
                             ),
                           ),
                         ),

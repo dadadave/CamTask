@@ -677,12 +677,20 @@ class BackendSupabase implements Backend {
   /* ---------------------------------------------------------------------- */
 
   @override
-  Future<String> lienDocument(String chemin) {
+  Future<String> lienDocument(String chemin, {String? nomFichier}) {
     return _garder(() async {
-      if (chemin.isEmpty) _echouer('Ce document n\'est plus disponible.');
-      return _client.storage
+      if (chemin.isEmpty) _echouer("Ce document n'est plus disponible.");
+      final lien = await _client.storage
           .from(_bucket)
           .createSignedUrl(chemin, _dureeLien.inSeconds);
+
+      // `download` pose un Content-Disposition: attachment. Sans lui, un PDF
+      // ou une image s'ouvriraient dans le navigateur au lieu d'etre
+      // enregistres ; avec, le fichier part dans les telechargements sous son
+      // nom d'origine.
+      if (nomFichier == null || nomFichier.isEmpty) return lien;
+      final separateur = lien.contains('?') ? '&' : '?';
+      return '$lien${separateur}download=${Uri.encodeComponent(nomFichier)}';
     });
   }
 }

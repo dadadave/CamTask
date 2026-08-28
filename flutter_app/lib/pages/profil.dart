@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
 import '../widgets/coquille.dart';
+import '../widgets/document.dart';
 
 class PageProfil extends StatefulWidget {
   const PageProfil({super.key});
@@ -153,7 +154,9 @@ class _PageProfilState extends State<PageProfil> {
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
-                    color: estEmploye ? Palette.bleuFonce : Palette.orange,
+                    color: estEmploye
+                        ? context.cl.bleuTexte
+                        : context.cl.accentTexte,
                   ),
                 ),
               ),
@@ -459,7 +462,7 @@ class _CarteDemande extends StatelessWidget {
         child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(width: 4, color: Palette.orange),
+          Container(width: 4, color: _accent(demande.statut)),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(Espaces.lg),
@@ -500,7 +503,9 @@ class _CarteDemande extends StatelessWidget {
                       color: context.cl.encreDouce,
                     ),
                   ),
-                  if (demande.pieces.isNotEmpty) ...[
+                  // Ce que le client a envoyé : il sait déjà ce que c'est,
+                  // un rappel en une ligne suffit.
+                  if (demande.piecesClient.isNotEmpty) ...[
                     const SizedBox(height: Espaces.sm),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,8 +515,9 @@ class _CarteDemande extends StatelessWidget {
                         const SizedBox(width: 5),
                         Expanded(
                           child: Text(
-                            '${demande.pieces.length} document(s) : '
-                            '${demande.pieces.map((p) => p.fichier).join(', ')}',
+                            '${demande.piecesClient.length} document(s) '
+                            'envoyé(s) : '
+                            '${demande.piecesClient.map((p) => p.fichier).join(', ')}',
                             style: TextStyle(
                               fontSize: 11.5,
                               height: 1.45,
@@ -522,36 +528,60 @@ class _CarteDemande extends StatelessWidget {
                       ],
                     ),
                   ],
+
+                  // Ce que l'agence lui renvoie : c'est ce qu'il attend, et
+                  // il doit pouvoir l'ouvrir d'un appui.
+                  if (demande.piecesAgence.isNotEmpty) ...[
+                    const SizedBox(height: Espaces.md),
+                    Container(
+                      padding: const EdgeInsets.all(Espaces.md),
+                      decoration: BoxDecoration(
+                        color: context.cl.bleuFantome,
+                        borderRadius: Rayons.brSm,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.download_rounded,
+                                  size: 15, color: context.cl.bleuTexte),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  demande.piecesAgence.length == 1
+                                      ? 'Un document vous a été envoyé'
+                                      : '${demande.piecesAgence.length} documents '
+                                          'vous ont été envoyés',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: context.cl.bleuTexte,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: Espaces.sm),
+                          for (final p in demande.piecesAgence)
+                            LigneDocument(piece: p),
+                          Text(
+                            'Appuyez sur un document pour le télécharger.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: context.cl.grise,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: Espaces.md),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 11, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: context.cl.orangeFantome,
-                      borderRadius: Rayons.brPilule,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            color: Palette.orange,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          demande.statut,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Palette.orange,
-                          ),
-                        ),
-                      ],
-                    ),
+                  // Le même repère visuel que dans la liste du conseiller :
+                  // les deux côtés parlent ainsi le même langage.
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: EtiquetteStatut(statut: demande.statut),
                   ),
                 ],
               ),
@@ -562,4 +592,11 @@ class _CarteDemande extends StatelessWidget {
       ),
     );
   }
+
+  /// La couleur du liseré, accordée au statut du dossier.
+  static Color _accent(String statut) => switch (statut) {
+        'En cours' => Palette.bleuFonce,
+        'Traitée' => Palette.succes,
+        _ => Palette.orange,
+      };
 }

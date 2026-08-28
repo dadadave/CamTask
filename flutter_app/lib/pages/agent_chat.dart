@@ -131,7 +131,8 @@ class _PageAgentChatState extends State<PageAgentChat> {
               padding: const EdgeInsets.all(Espaces.md),
               child: Text(
                 _erreur,
-                style: const TextStyle(fontSize: 12.5, color: Palette.orange),
+                style: TextStyle(
+                    fontSize: 12.5, color: context.cl.accentTexte),
               ),
             ),
           Expanded(

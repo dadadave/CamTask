@@ -345,7 +345,8 @@ class AppState extends ChangeNotifier {
 
   /// Un lien de téléchargement à durée limitée. Le bucket étant privé, il
   /// n'existe pas d'URL permanente.
-  Future<String> lienDocument(String chemin) => _backend.lienDocument(chemin);
+  Future<String> lienDocument(String chemin, {String? nomFichier}) =>
+      _backend.lienDocument(chemin, nomFichier: nomFichier);
 
   static String dateDuJour() {
     final n = DateTime.now();

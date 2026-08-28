@@ -116,7 +116,7 @@ class _BackendFactice implements Backend {
       ];
 
   @override
-  Future<String> lienDocument(String chemin) async =>
+  Future<String> lienDocument(String chemin, {String? nomFichier}) async =>
       'https://exemple.test/$chemin';
 
   /* -- Administration --------------------------------------------------- */

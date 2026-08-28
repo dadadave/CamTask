@@ -134,5 +134,8 @@ abstract class Backend {
   ///
   /// Le bucket est privé : il n'existe pas d'URL publique, et c'est la RLS
   /// qui décide si le lien peut être délivré.
-  Future<String> lienDocument(String chemin);
+  ///
+  /// [nomFichier] force l'enregistrement sous ce nom au lieu d'un affichage
+  /// dans le navigateur — c'est la différence entre consulter et télécharger.
+  Future<String> lienDocument(String chemin, {String? nomFichier});
 }

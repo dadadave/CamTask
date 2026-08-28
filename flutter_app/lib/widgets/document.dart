@@ -11,11 +11,15 @@ import '../theme.dart';
 ///
 /// Il n'existe pas d'URL permanente : on demande au serveur un lien signé,
 /// valable quelques minutes, et c'est la RLS qui décide de le délivrer.
-Future<void> ouvrirDocument(BuildContext context, String chemin) async {
+Future<void> ouvrirDocument(
+  BuildContext context,
+  String chemin, {
+  String? nomFichier,
+}) async {
   final etat = PorteeApp.of(context);
   final messager = ScaffoldMessenger.of(context);
   try {
-    final lien = await etat.lienDocument(chemin);
+    final lien = await etat.lienDocument(chemin, nomFichier: nomFichier);
     if (!await launchUrl(Uri.parse(lien),
         mode: LaunchMode.externalApplication)) {
       messager.showSnackBar(const SnackBar(
@@ -52,7 +56,10 @@ class LigneDocument extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final deLAgence = piece.sens == SensPiece.agence;
-    final accent = deLAgence ? Palette.bleuFonce : Palette.orange;
+    // Aplat de la pastille d'un côté, teinte d'écriture de l'autre : le
+    // premier porte du blanc, la seconde se lit sur fond clair.
+    final aplat = deLAgence ? Palette.bleuFonce : Palette.orange;
+    final accent = deLAgence ? context.cl.bleuTexte : context.cl.accentTexte;
     final fond =
         deLAgence ? context.cl.bleuFantome : context.cl.orangeFantome;
 
@@ -65,7 +72,8 @@ class LigneDocument extends StatelessWidget {
           borderRadius: Rayons.brSm,
           onTap: piece.chemin.isEmpty
               ? null
-              : () => ouvrirDocument(context, piece.chemin),
+              : () => ouvrirDocument(context, piece.chemin,
+                  nomFichier: piece.fichier),
           child: Padding(
             padding: const EdgeInsets.all(Espaces.md),
             child: Row(
@@ -74,7 +82,7 @@ class LigneDocument extends StatelessWidget {
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: accent,
+                    color: aplat,
                     borderRadius: Rayons.r(9),
                   ),
                   child: Icon(

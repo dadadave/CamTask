@@ -56,7 +56,8 @@ class BulleMessage extends StatelessWidget {
               InkWell(
                 onTap: (chemin == null || chemin.isEmpty)
                     ? null
-                    : () => ouvrirDocument(context, chemin),
+                    : () => ouvrirDocument(context, chemin,
+                        nomFichier: m.fichier),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
