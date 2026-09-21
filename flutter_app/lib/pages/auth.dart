@@ -7,18 +7,54 @@ import '../theme.dart';
 import '../widgets/communs.dart';
 import '../widgets/illustrations.dart';
 
-/// Pièces exigées à l'inscription, selon le profil.
-const _piecesUtilisateur = <String>[
-  'Photo de la CNI',
-  "Numéro d'identifiant unique (NIU) — justificatif",
-];
+/// Les trois profils que l'on peut choisir à l'inscription.
+///
+/// Deux dimensions se cachent derrière : [Role] décide des pièces à
+/// fournir, [TypeClient] décide du tarif. Un conseiller n'est pas un
+/// client — il ne sera facturé de rien, et devra être validé.
+enum Profil { particulier, entreprise, conseiller }
 
-const _piecesEmploye = <String>[
-  'CNI',
-  'Plan de localisation',
-  'Carte / attestation de numéro de contribuable',
-  "CNI d'un garant qui se porte caution",
-];
+extension _ProfilDetails on Profil {
+  String get libelle => switch (this) {
+        Profil.particulier => 'Particulier',
+        Profil.entreprise => 'Entreprise',
+        Profil.conseiller => 'Conseiller',
+      };
+
+  String get precision => switch (this) {
+        Profil.particulier => 'Pour moi-même',
+        Profil.entreprise => 'Pour ma société',
+        Profil.conseiller => 'Rejoindre l\'équipe',
+      };
+
+  Role get role =>
+      this == Profil.conseiller ? Role.employe : Role.utilisateur;
+
+  TypeClient get typeClient => this == Profil.entreprise
+      ? TypeClient.entreprise
+      : TypeClient.particulier;
+
+  List<String> get pieces => switch (this) {
+        Profil.particulier => const [
+            'Photo de la CNI',
+            "Numéro d'identifiant unique (NIU) — justificatif",
+          ],
+        // À confirmer : cette liste est une proposition, pas une consigne
+        // de l'agence.
+        Profil.entreprise => const [
+            'Registre de commerce',
+            "Numéro d'identifiant unique (NIU) de la société",
+            'CNI du gérant',
+            'Plan de localisation',
+          ],
+        Profil.conseiller => const [
+            'CNI',
+            'Plan de localisation',
+            'Carte / attestation de numéro de contribuable',
+            "CNI d'un garant qui se porte caution",
+          ],
+      };
+}
 
 class PageAuth extends StatefulWidget {
   const PageAuth({super.key});
@@ -29,7 +65,7 @@ class PageAuth extends StatefulWidget {
 
 class _PageAuthState extends State<PageAuth> {
   bool _inscription = false;
-  Role _role = Role.utilisateur;
+  Profil _profil = Profil.particulier;
   String _erreur = '';
 
   /// Un appel réseau est en cours : le bouton laisse place à une attente,
@@ -53,8 +89,7 @@ class _PageAuthState extends State<PageAuth> {
     super.dispose();
   }
 
-  List<String> get _piecesRequises =>
-      _role == Role.utilisateur ? _piecesUtilisateur : _piecesEmploye;
+  List<String> get _piecesRequises => _profil.pieces;
 
   List<PieceEnvoi> get _pieces => [
         for (final e in _fichiers.entries)
@@ -97,7 +132,7 @@ class _PageAuthState extends State<PageAuth> {
 
   Future<void> _inscrire() async {
     final manquants = <String>[];
-    if (_role == Role.utilisateur) {
+    if (_profil != Profil.conseiller) {
       if (_nom.text.trim().isEmpty) manquants.add('Nom');
       if (_prenom.text.trim().isEmpty) manquants.add('Prénom');
     } else if (_nom.text.trim().isEmpty) {
@@ -106,9 +141,9 @@ class _PageAuthState extends State<PageAuth> {
     if (_email.text.trim().isEmpty) manquants.add('Email');
     if (_telephone.text.trim().isEmpty) manquants.add('Numéro de téléphone');
     if (_niu.text.trim().isEmpty) {
-      manquants.add(_role == Role.utilisateur
-          ? "Numéro d'identifiant unique"
-          : 'Numéro de contribuable');
+      manquants.add(_profil == Profil.conseiller
+          ? 'Numéro de contribuable'
+          : "Numéro d'identifiant unique");
     }
     // Le mot de passe vaut pour les deux profils : l'authentification
     // Supabase en exige un pour chaque compte.
@@ -123,7 +158,8 @@ class _PageAuthState extends State<PageAuth> {
     final etat = PorteeApp.of(context);
     await _executer(
       () => etat.inscription(
-        role: _role,
+        role: _profil.role,
+        typeClient: _profil.typeClient,
         nom: _nom.text.trim(),
         prenom: _prenom.text.trim(),
         email: _email.text.trim(),
@@ -262,27 +298,59 @@ class _PageAuthState extends State<PageAuth> {
       ];
 
   List<Widget> _champsInscription() => [
+        const LibelleSection(texte: 'Vous êtes'),
+        const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(
-              child: _BoutonRole(
-                libelle: 'Utilisateur',
-                actif: _role == Role.utilisateur,
-                onTap: () => setState(() => _role = Role.utilisateur),
+            for (final p in Profil.values) ...[
+              if (p != Profil.values.first) const SizedBox(width: 8),
+              Expanded(
+                child: _BoutonRole(
+                  libelle: p.libelle,
+                  precision: p.precision,
+                  actif: _profil == p,
+                  onTap: () => setState(() {
+                    _profil = p;
+                    // Les pièces changent avec le profil : celles déjà
+                    // choisies ne correspondent plus.
+                    _fichiers.clear();
+                    _erreur = '';
+                  }),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _BoutonRole(
-                libelle: 'Personne employée',
-                actif: _role == Role.employe,
-                onTap: () => setState(() => _role = Role.employe),
-              ),
-            ),
+            ],
           ],
         ),
+        if (_profil == Profil.conseiller) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(Espaces.md),
+            decoration: BoxDecoration(
+              color: context.cl.bleuFantome,
+              borderRadius: Rayons.brSm,
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 18, color: context.cl.bleuTexte),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Votre candidature sera examinée par CAM-TAXE. Vous '
+                    'accéderez aux dossiers une fois validée.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.45,
+                      color: context.cl.encreDouce,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
-        if (_role == Role.utilisateur) ...[
+        if (_profil == Profil.particulier) ...[
           Champ(libelle: 'Nom', controleur: _nom, majuscules: false),
           const SizedBox(height: 18),
           Champ(libelle: 'Prénom', controleur: _prenom, majuscules: false),
@@ -304,9 +372,11 @@ class _PageAuthState extends State<PageAuth> {
         ),
         const SizedBox(height: 18),
         Champ(
-          libelle: _role == Role.utilisateur
-              ? "Numéro d'identifiant unique (NIU)"
-              : 'Numéro de contribuable',
+          libelle: switch (_profil) {
+            Profil.particulier => "Numéro d'identifiant unique (NIU)",
+            Profil.entreprise => 'NIU de la société',
+            Profil.conseiller => 'Numéro de contribuable',
+          },
           controleur: _niu,
           majuscules: false,
         ),
@@ -374,13 +444,24 @@ class _Onglet extends StatelessWidget {
 class _BoutonRole extends StatelessWidget {
   const _BoutonRole({
     required this.libelle,
+    required this.precision,
     required this.actif,
     required this.onTap,
   });
 
   final String libelle;
+
+  /// Une ligne qui lève l'ambiguïté : « Particulier » et « Entreprise » ne
+  /// disent pas d'eux-mêmes qu'il s'agit de tarifs différents.
+  final String precision;
   final bool actif;
   final VoidCallback onTap;
+
+  IconData get _icone => switch (libelle) {
+        'Entreprise' => Icons.business_outlined,
+        'Conseiller' => Icons.badge_outlined,
+        _ => Icons.person_outline_rounded,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -392,7 +473,7 @@ class _BoutonRole extends StatelessWidget {
         decoration: BoxDecoration(
           color: actif ? context.cl.orangeFantome : context.cl.carte,
           border: Border.all(
-            color: actif ? Palette.orange : context.cl.ligne,
+            color: actif ? context.cl.accentTexte : context.cl.ligne,
             width: actif ? 1.6 : 1,
           ),
           borderRadius: Rayons.brSm,
@@ -400,21 +481,32 @@ class _BoutonRole extends StatelessWidget {
         child: Column(
           children: [
             Icon(
-              libelle == 'Utilisateur'
-                  ? Icons.person_outline_rounded
-                  : Icons.badge_outlined,
+              _icone,
               size: 20,
-              color: actif ? Palette.orange : context.cl.grise,
+              color: actif ? context.cl.accentTexte : context.cl.grise,
             ),
             const SizedBox(height: 5),
             Text(
               libelle,
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
+                height: 1.2,
+                color: actif ? context.cl.accentTexte : context.cl.encre,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              precision,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: TextStyle(
+                fontSize: 9.5,
                 height: 1.25,
-                color: actif ? Palette.orange : context.cl.encreDouce,
+                color: actif ? context.cl.accentTexte : context.cl.grise,
               ),
             ),
           ],

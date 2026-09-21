@@ -46,6 +46,7 @@ class _BackendFactice implements Backend {
     required String telephone,
     required String niu,
     required String motDePasse,
+    TypeClient typeClient = TypeClient.particulier,
     List<PieceEnvoi> pieces = const [],
   }) async =>
       session = _compteFactice;
@@ -118,6 +119,235 @@ class _BackendFactice implements Backend {
   @override
   Future<String> lienDocument(String chemin, {String? nomFichier}) async =>
       'https://exemple.test/$chemin';
+
+  /* -- Paiements -------------------------------------------------------- */
+
+  /// L'agence est configuree : un moyen actif et un tarif.
+  final List<MoyenPaiement> moyens = const [
+    MoyenPaiement(
+      id: 'mtn',
+      libelle: 'MTN Mobile Money',
+      codeUssd: '*126*4*111111#',
+      beneficiaire: 'CAM-TAXE',
+      consigne: 'Entrez le montant puis votre code PIN.',
+    ),
+  ];
+
+  int montantAudit = 25000;
+  final List<Paiement> paiements = [];
+
+  @override
+  Future<List<MoyenPaiement>> moyensPaiement() async => List.of(moyens);
+
+  /// Les prix des deux profils, comme en base.
+  int montantAuditEntreprise = 60000;
+
+  /// Emise au depot d'un dossier, comme le declencheur en base.
+  final List<Facture> factures = [];
+
+  @override
+  Future<int?> monTarif(String serviceId) async {
+    if (serviceId != 'audit') return null;
+    final prix = (session?.typeClient == TypeClient.entreprise)
+        ? montantAuditEntreprise
+        : montantAudit;
+    return prix == 0 ? null : prix;
+  }
+
+  @override
+  Future<List<TarifService>> tarifs() async => [
+        TarifService(
+          serviceId: 'audit',
+          libelle: 'Faire un audit',
+          particulier: montantAudit,
+          entreprise: montantAuditEntreprise,
+          actif: montantAudit > 0 || montantAuditEntreprise > 0,
+        ),
+      ];
+
+  /// Rejoue le declencheur : un dossier facture emet sa facture.
+  Facture emettre(String demandeId, {String service = 'audit'}) {
+    final prix = (session?.typeClient == TypeClient.entreprise)
+        ? montantAuditEntreprise
+        : montantAudit;
+    final f = Facture(
+      id: 'facture-${factures.length}',
+      numero: 'F-2026-${(factures.length + 1).toString().padLeft(4, '0')}',
+      montant: prix,
+      statut: StatutFacture.aPayer,
+      date: AppState.dateDuJour(),
+      serviceLibelle: 'Faire un audit',
+      demandeId: demandeId,
+    );
+    factures.add(f);
+    return f;
+  }
+
+  @override
+  Future<Facture?> factureDuDossier(String demandeId) async {
+    for (final f in factures) {
+      if (f.demandeId == demandeId) return f;
+    }
+    return null;
+  }
+
+  @override
+  Future<List<Facture>> mesFactures() async => List.of(factures);
+
+  @override
+  Future<List<Facture>> listerFactures() async => List.of(factures);
+
+  @override
+  Future<void> annulerFacture(String factureId) async {
+    if (!(session?.estAdmin ?? false)) {
+      throw const ErreurBackend('Seul un administrateur annule une facture');
+    }
+    for (var i = 0; i < factures.length; i++) {
+      if (factures[i].id != factureId) continue;
+      if (!factures[i].aPayer) {
+        throw const ErreurBackend('Facture introuvable ou deja reglee');
+      }
+      final f = factures[i];
+      factures[i] = Facture(
+        id: f.id,
+        numero: f.numero,
+        montant: f.montant,
+        statut: StatutFacture.annulee,
+        date: f.date,
+        serviceLibelle: f.serviceLibelle,
+        demandeId: f.demandeId,
+      );
+      return;
+    }
+    throw const ErreurBackend('Facture introuvable ou deja reglee');
+  }
+
+  @override
+  Future<void> declarerPaiement({
+    required String factureId,
+    required String operateur,
+    required String numeroEnvoyeur,
+    required String reference,
+  }) async {
+    final f = factures.where((x) => x.id == factureId);
+    if (f.isEmpty) throw const ErreurBackend('Facture introuvable');
+    if (!f.first.aPayer) {
+      throw const ErreurBackend('Cette facture est deja reglee');
+    }
+    // On rejoue la regle de la base : une seule declaration par facture.
+    if (paiements.any((p) =>
+        p.demandeId == f.first.demandeId &&
+        p.statut != StatutPaiement.rejete)) {
+      throw const ErreurBackend(
+          'Un paiement est deja enregistre pour cette facture');
+    }
+    paiements.add(Paiement(
+      id: 'paiement-${paiements.length}',
+      // Le montant vient de la facture, jamais de l'application.
+      montant: f.first.montant,
+      operateur: operateur,
+      statut: StatutPaiement.declare,
+      date: AppState.dateDuJour(),
+      numeroEnvoyeur: numeroEnvoyeur,
+      reference: reference,
+      demandeId: f.first.demandeId,
+    ));
+  }
+
+  @override
+  Future<List<Paiement>> paiementsDuDossier(String demandeId) async =>
+      [for (final p in paiements) if (p.demandeId == demandeId) p];
+
+  @override
+  Future<List<Paiement>> listerPaiements() async => List.of(paiements);
+
+  @override
+  Future<void> statuerPaiement(String paiementId, bool confirme,
+      {String motif = ''}) async {
+    // Seul un administrateur statue : c'est la regle que porte la base.
+    if (!(session?.estAdmin ?? false)) {
+      throw const ErreurBackend(
+          'Seul un administrateur confirme un encaissement');
+    }
+    for (var i = 0; i < paiements.length; i++) {
+      if (paiements[i].id != paiementId) continue;
+      if (!paiements[i].enAttente) {
+        throw const ErreurBackend('Declaration introuvable ou deja traitee');
+      }
+      final p = paiements[i];
+      paiements[i] = Paiement(
+        id: p.id,
+        montant: p.montant,
+        operateur: p.operateur,
+        statut:
+            confirme ? StatutPaiement.confirme : StatutPaiement.rejete,
+        date: p.date,
+        numeroEnvoyeur: p.numeroEnvoyeur,
+        reference: p.reference,
+        motif: motif,
+        demandeId: p.demandeId,
+      );
+      if (confirme) {
+        for (var j = 0; j < factures.length; j++) {
+          if (factures[j].demandeId != p.demandeId) continue;
+          final f = factures[j];
+          factures[j] = Facture(
+            id: f.id,
+            numero: f.numero,
+            montant: f.montant,
+            statut: StatutFacture.payee,
+            date: f.date,
+            serviceLibelle: f.serviceLibelle,
+            demandeId: f.demandeId,
+          );
+        }
+      }
+      return;
+    }
+    throw const ErreurBackend('Declaration introuvable ou deja traitee');
+  }
+
+  @override
+  Future<void> definirTypeClient(String compteId, TypeClient type) async {
+    if (!(session?.estAdmin ?? false)) {
+      throw const ErreurBackend(
+          'Seul un administrateur modifie la classification');
+    }
+    for (var i = 0; i < comptes.length; i++) {
+      if (comptes[i].id == compteId) {
+        comptes[i] = comptes[i].avec(typeClient: type);
+      }
+    }
+  }
+
+  @override
+  Future<void> definirTarif(
+    String serviceId,
+    int particulier,
+    int entreprise,
+    bool actif,
+  ) async {
+    if (!(session?.estAdmin ?? false)) {
+      throw const ErreurBackend('Seul un administrateur modifie les tarifs');
+    }
+    if (serviceId == 'audit') {
+      montantAudit = particulier;
+      montantAuditEntreprise = entreprise;
+    }
+  }
+
+  @override
+  Future<void> definirMoyen(
+    String moyenId,
+    String codeUssd,
+    String beneficiaire,
+    bool actif,
+  ) async {
+    if (!(session?.estAdmin ?? false)) {
+      throw const ErreurBackend(
+          'Seul un administrateur modifie les moyens de paiement');
+    }
+  }
 
   /* -- Administration --------------------------------------------------- */
 
@@ -214,6 +444,19 @@ final _compteAgent = Compte(
   pieces: const [],
   creeLe: AppState.dateDuJour(),
   estAgent: true,
+);
+
+const _compteEntreprise = Compte(
+  id: 'client-1',
+  role: Role.utilisateur,
+  typeClient: TypeClient.entreprise,
+  nom: 'SARL EXEMPLE',
+  prenom: '',
+  email: 'contact@exemple.cm',
+  telephone: '699000555',
+  niu: 'M123456789012B',
+  pieces: [],
+  creeLe: '01/01/2026',
 );
 
 final _compteAdmin = Compte(
@@ -322,7 +565,9 @@ void main() {
     // Le formulaire de l'audit, dans l'ordre demandé.
     expect(find.text('Nom de la structure'), findsOneWidget);
     expect(find.text("Type d'audit"), findsOneWidget);
-    expect(find.text('PAIEMENT DE CAUTION'), findsOneWidget);
+    // Plus de faux bouton : l'ecran annonce que la caution se regle
+    // apres l'envoi, ce qui est la verite.
+    expect(find.textContaining('caution est demand'), findsOneWidget);
 
     // Les sections de documents et le bouton agent sont en bas de la page :
     // la liste est paresseuse, il faut défiler pour qu'ils soient construits.
@@ -372,7 +617,205 @@ void main() {
 
   _testsAgent();
   _testsAdmin();
+  _testsPaiement();
   _testsTheme();
+}
+
+/// Un client declare, il ne valide pas. C'est toute la regle : sans elle,
+/// n'importe qui ferait avancer son dossier en affirmant avoir paye.
+void _testsPaiement() {
+  /// Un etat de client, avec son dossier deja facture.
+  Future<(AppState, _BackendFactice, Facture)> facture({
+    TypeClient type = TypeClient.particulier,
+  }) async {
+    SharedPreferences.setMockInitialValues({});
+    final faux = _BackendFactice(
+      session: type == TypeClient.entreprise
+          ? _compteEntreprise
+          : _compteFactice,
+    );
+    faux.demandes.add(_dossierClient);
+    final f = faux.emettre('dossier-1');
+    final etat = AppState(backendInjecte: faux, configure: true);
+    await etat.charger();
+    return (etat, faux, f);
+  }
+
+  testWidgets('le depot emet une facture numerotee', (tester) async {
+    final (_, _, f) = await facture();
+    expect(f.numero, 'F-2026-0001');
+    expect(f.statut, StatutFacture.aPayer);
+    expect(f.montant, 25000);
+  });
+
+  testWidgets('une entreprise est facturee a son propre tarif',
+      (tester) async {
+    final (_, _, f) = await facture(type: TypeClient.entreprise);
+    expect(f.montant, 60000);
+  });
+
+  testWidgets('un client declare un versement, sans le valider',
+      (tester) async {
+    final (etat, _, f) = await facture();
+    await etat.declarerPaiement(
+      factureId: f.id,
+      operateur: 'mtn',
+      numeroEnvoyeur: '699000111',
+      reference: 'MP240821.1432.A1',
+    );
+
+    final liste = await etat.paiementsDuDossier('dossier-1');
+    expect(liste.single.statut, StatutPaiement.declare);
+    expect(liste.single.enAttente, isTrue);
+  });
+
+  testWidgets('le montant vient de la facture, pas du client',
+      (tester) async {
+    final (etat, _, f) = await facture();
+    await etat.declarerPaiement(
+      factureId: f.id,
+      operateur: 'mtn',
+      numeroEnvoyeur: '699000111',
+      reference: 'MP.1',
+    );
+
+    final liste = await etat.paiementsDuDossier('dossier-1');
+    expect(liste.single.montant, 25000);
+  });
+
+  testWidgets('on ne paie pas deux fois la meme facture', (tester) async {
+    final (etat, _, f) = await facture();
+    await etat.declarerPaiement(
+      factureId: f.id,
+      operateur: 'mtn',
+      numeroEnvoyeur: '699000111',
+      reference: 'MP.1',
+    );
+
+    await expectLater(
+      etat.declarerPaiement(
+        factureId: f.id,
+        operateur: 'mtn',
+        numeroEnvoyeur: '699000111',
+        reference: 'MP.2',
+      ),
+      throwsA(isA<ErreurBackend>()),
+    );
+  });
+
+  testWidgets('la confirmation solde la facture', (tester) async {
+    final (etat, faux, f) = await facture();
+    await etat.declarerPaiement(
+      factureId: f.id,
+      operateur: 'mtn',
+      numeroEnvoyeur: '699000111',
+      reference: 'MP.1',
+    );
+    faux.session = _compteAdmin;
+    await etat.statuerPaiement(faux.paiements.single.id, true);
+
+    expect(faux.factures.single.statut, StatutFacture.payee);
+  });
+
+  testWidgets('seul un administrateur annule une facture', (tester) async {
+    final (etat, faux, f) = await facture();
+    await expectLater(
+      etat.annulerFacture(f.id),
+      throwsA(isA<ErreurBackend>()),
+    );
+
+    faux.session = _compteAdmin;
+    await etat.annulerFacture(f.id);
+    expect(faux.factures.single.statut, StatutFacture.annulee);
+  });
+
+  testWidgets('un client ne peut PAS confirmer son propre versement',
+      (tester) async {
+    final faux = _BackendFactice(session: _compteFactice);
+    faux.emettre('dossier-1');
+    faux.paiements.add(const Paiement(
+      id: 'paiement-0',
+      montant: 25000,
+      operateur: 'mtn',
+      statut: StatutPaiement.declare,
+      date: '01/01/2026',
+      demandeId: 'dossier-1',
+    ));
+    SharedPreferences.setMockInitialValues({});
+    final etat = AppState(backendInjecte: faux, configure: true);
+    await etat.charger();
+
+    await expectLater(
+      etat.statuerPaiement('paiement-0', true),
+      throwsA(isA<ErreurBackend>()),
+    );
+    expect(faux.paiements.single.statut, StatutPaiement.declare);
+  });
+
+  testWidgets('un conseiller ne peut PAS confirmer non plus', (tester) async {
+    final faux = _BackendFactice(session: _compteAgent);
+    faux.emettre('dossier-1');
+    faux.paiements.add(const Paiement(
+      id: 'paiement-0',
+      montant: 25000,
+      operateur: 'mtn',
+      statut: StatutPaiement.declare,
+      date: '01/01/2026',
+      demandeId: 'dossier-1',
+    ));
+    SharedPreferences.setMockInitialValues({});
+    final etat = AppState(backendInjecte: faux, configure: true);
+    await etat.charger();
+
+    await expectLater(
+      etat.statuerPaiement('paiement-0', true),
+      throwsA(isA<ErreurBackend>()),
+    );
+  });
+
+  testWidgets('un administrateur confirme, puis ne peut plus y revenir',
+      (tester) async {
+    final faux = _BackendFactice(session: _compteAdmin);
+    faux.emettre('dossier-1');
+    faux.paiements.add(const Paiement(
+      id: 'paiement-0',
+      montant: 25000,
+      operateur: 'mtn',
+      statut: StatutPaiement.declare,
+      date: '01/01/2026',
+      demandeId: 'dossier-1',
+    ));
+    SharedPreferences.setMockInitialValues({});
+    final etat = AppState(backendInjecte: faux, configure: true);
+    await etat.charger();
+
+    await etat.statuerPaiement('paiement-0', true);
+    expect(faux.paiements.single.statut, StatutPaiement.confirme);
+
+    // Une declaration deja traitee ne se rejoue pas.
+    await expectLater(
+      etat.statuerPaiement('paiement-0', false),
+      throwsA(isA<ErreurBackend>()),
+    );
+  });
+
+  testWidgets('seul un administrateur modifie les tarifs', (tester) async {
+    final client = await _etatNeuf(connecte: true);
+    await expectLater(
+      client.definirTarif('audit', 50000, 90000, true),
+      throwsA(isA<ErreurBackend>()),
+    );
+
+    final admin = await _etatNeuf(admin: true);
+    await admin.definirTarif('audit', 50000, 90000, true);
+    final t = (await admin.tarifs()).single;
+    expect(t.particulier, 50000);
+    expect(t.entreprise, 90000);
+  });
+
+  testWidgets('le montant s affiche avec ses milliers', (tester) async {
+    expect(montantEnFcfa(25000), '25\u202F000 FCFA');
+  });
 }
 
 /// Nommer un conseiller donne acces aux dossiers de tous les clients : c'est

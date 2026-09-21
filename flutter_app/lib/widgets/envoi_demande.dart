@@ -20,6 +20,9 @@ mixin EnvoiDemande<T extends StatefulWidget> on State<T> {
 
   /// Envoie la demande, puis va au profil. En cas d'échec, appelle
   /// [surErreur] avec un message déjà rédigé en français.
+  ///
+  /// [surSucces] permet de conduire ailleurs que vers le profil — l'audit
+  /// s'en sert pour enchainer sur le reglement de la caution.
   Future<void> envoyerDemande({
     required String serviceId,
     required String serviceLibelle,
@@ -27,6 +30,7 @@ mixin EnvoiDemande<T extends StatefulWidget> on State<T> {
     required String confirmation,
     required ValueChanged<String> surErreur,
     List<PieceEnvoi> pieces = const [],
+    void Function(Demande)? surSucces,
   }) async {
     if (_envoi) return;
     setState(() => _envoi = true);
@@ -38,7 +42,7 @@ mixin EnvoiDemande<T extends StatefulWidget> on State<T> {
     final navigateur = Navigator.of(context);
 
     try {
-      await etat.envoyerDemande(
+      final demande = await etat.envoyerDemande(
         serviceId: serviceId,
         serviceLibelle: serviceLibelle,
         resume: resume,
@@ -46,7 +50,29 @@ mixin EnvoiDemande<T extends StatefulWidget> on State<T> {
       );
       if (!mounted) return;
       messager.showSnackBar(SnackBar(content: Text(confirmation)));
-      navigateur.pushNamedAndRemoveUntil('/profil', (r) => false);
+
+      if (surSucces != null) {
+        surSucces(demande);
+        return;
+      }
+
+      // Le dépôt du dossier a pu émettre une facture : on conduit alors au
+      // règlement plutôt qu'au profil. Sans cela le client serait facturé
+      // sans qu'on lui propose jamais de payer.
+      final facture = await etat.factureDuDossier(demande.id);
+      if (!mounted) return;
+      if (facture != null && facture.aPayer) {
+        navigateur.pushReplacementNamed(
+          '/paiement',
+          arguments: (
+            demandeId: demande.id,
+            serviceId: serviceId,
+            serviceLibelle: serviceLibelle,
+          ),
+        );
+      } else {
+        navigateur.pushNamedAndRemoveUntil('/profil', (r) => false);
+      }
     } on ErreurBackend catch (e) {
       if (!mounted) return;
       surErreur(e.message);

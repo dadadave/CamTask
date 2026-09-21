@@ -45,6 +45,12 @@ const _ongletsAdmin = <_Onglets>[
     plein: Icons.groups_rounded
   ),
   (
+    route: '/admin/paiements',
+    libelle: 'Paiements',
+    icone: Icons.receipt_long_outlined,
+    plein: Icons.receipt_long_rounded
+  ),
+  (
     route: '/profil',
     libelle: 'Profil',
     icone: Icons.person_outline_rounded,
@@ -114,7 +120,10 @@ class NavigationBasse extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               for (final o in onglets)
+                // L'onglet actif porte son libellé : il lui faut plus de
+                // place que les autres, qui ne montrent qu'une icône.
                 Flexible(
+                  flex: o.route == routeCourante ? 3 : 1,
                   child: _Onglet(
                     libelle: o.libelle,
                     icone: o.icone,
@@ -172,7 +181,7 @@ class _Onglet extends StatelessWidget {
           duration: const Duration(milliseconds: 240),
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.symmetric(
-            horizontal: actif ? 16 : 14,
+            horizontal: actif ? 14 : 12,
             vertical: 11,
           ),
           decoration: BoxDecoration(

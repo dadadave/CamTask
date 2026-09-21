@@ -118,15 +118,25 @@ class _PageAdminEquipeState extends State<PageAdminEquipe> {
     final etat = PorteeApp.of(context);
     final tous = _membres;
     final liste = tous == null ? const <MembreEquipe>[] : _filtres(tous);
+
+    // Quatre populations, dans l'ordre où elles réclament votre attention :
+    // ceux qui attendent une décision d'abord, les comptes réglés ensuite.
+    final candidats = [for (final m in liste) if (m.estCandidat) m];
     final conseillers = [for (final m in liste) if (m.estAgent) m];
-    final autres = [for (final m in liste) if (!m.estAgent) m];
+    final entreprises = [
+      for (final m in liste)
+        if (!m.estAgent && !m.estCandidat && m.estEntreprise) m,
+    ];
+    final particuliers = [
+      for (final m in liste)
+        if (!m.estAgent && !m.estCandidat && !m.estEntreprise) m,
+    ];
 
     return Coquille(
       titre: 'Équipe',
       sousTitre: tous == null
           ? 'Chargement…'
-          : '${tous.where((m) => m.estAgent).length} conseiller(s) '
-              'sur ${tous.length} compte(s)',
+          : _resume(tous),
       routeCourante: '/admin/equipe',
       retour: etat.estAgent,
       actions: [
@@ -158,19 +168,100 @@ class _PageAdminEquipeState extends State<PageAdminEquipe> {
                 style: TextStyle(fontSize: 13.5, color: context.cl.encreDouce),
               ),
             ),
+          if (candidats.isNotEmpty) ...[
+            _titre('Candidatures (${candidats.length})'),
+            _explication(
+              'Ces personnes ont rempli le formulaire de conseiller. '
+              'Validez-les pour leur ouvrir les dossiers clients.',
+            ),
+            for (final m in candidats) _ligne(m, etat),
+          ],
           if (conseillers.isNotEmpty) ...[
             _titre('Conseillers (${conseillers.length})'),
             for (final m in conseillers) _ligne(m, etat),
           ],
-          if (autres.isNotEmpty) ...[
-            _titre('Clients (${autres.length})'),
-            for (final m in autres) _ligne(m, etat),
+          if (entreprises.isNotEmpty) ...[
+            _titre('Entreprises (${entreprises.length})'),
+            for (final m in entreprises) _ligne(m, etat),
+          ],
+          if (particuliers.isNotEmpty) ...[
+            _titre('Particuliers (${particuliers.length})'),
+            for (final m in particuliers) _ligne(m, etat),
           ],
           _note(),
         ],
         const SizedBox(height: Espaces.xl),
       ],
     );
+  }
+
+  String _resume(List<MembreEquipe> tous) {
+    final candidats = tous.where((m) => m.estCandidat).length;
+    if (candidats > 0) {
+      return '$candidats candidature(s) à examiner';
+    }
+    final conseillers = tous.where((m) => m.estAgent).length;
+    return '$conseillers conseiller(s) sur ${tous.length} compte(s)';
+  }
+
+  Widget _explication(String texte) => Padding(
+        padding: const EdgeInsets.fromLTRB(
+            Espaces.bord, 0, Espaces.bord, Espaces.md),
+        child: Text(
+          texte,
+          style: TextStyle(
+              fontSize: 12, height: 1.45, color: context.cl.grise),
+        ),
+      );
+
+  /// Un client change de classification, donc de tarif. Réservé à
+  /// l'administrateur : le client ne choisit pas son prix.
+  Future<void> _classer(MembreEquipe m) async {
+    final vers = m.estEntreprise
+        ? TypeClient.particulier
+        : TypeClient.entreprise;
+    final nom = vers == TypeClient.entreprise ? 'entreprise' : 'particulier';
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Changer la classification'),
+        content: Text(
+          '${m.nomComplet} sera désormais facturé au tarif $nom.',
+          style: const TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirmer'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() {
+      _occupe = m.id;
+      _erreur = '';
+    });
+    try {
+      await PorteeApp.of(context).definirTypeClient(m.id, vers);
+      if (!mounted) return;
+      setState(() {
+        _membres = [
+          for (final x in _membres ?? const <MembreEquipe>[])
+            if (x.id == m.id) x.avec(typeClient: vers) else x,
+        ];
+      });
+    } on ErreurBackend catch (e) {
+      if (mounted) setState(() => _erreur = e.message);
+    } finally {
+      if (mounted) setState(() => _occupe = null);
+    }
   }
 
   Widget _barreRecherche() => Padding(
@@ -220,6 +311,7 @@ class _PageAdminEquipeState extends State<PageAdminEquipe> {
       soiMeme: soiMeme,
       occupe: _occupe == m.id,
       onBasculer: soiMeme ? null : () => _basculer(m),
+      onClasser: m.estAgent || m.estCandidat ? null : () => _classer(m),
     );
   }
 
@@ -245,12 +337,17 @@ class _LigneMembre extends StatelessWidget {
     required this.soiMeme,
     required this.occupe,
     required this.onBasculer,
+    this.onClasser,
   });
 
   final MembreEquipe membre;
   final bool soiMeme;
   final bool occupe;
   final VoidCallback? onBasculer;
+
+  /// Bascule particulier / entreprise. Nul pour un conseiller ou un
+  /// candidat, qui ne sont pas facturés.
+  final VoidCallback? onClasser;
 
   @override
   Widget build(BuildContext context) {
@@ -312,6 +409,25 @@ class _LigneMembre extends StatelessWidget {
                           ),
                         ),
                       ],
+                      if (m.estCandidat) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: context.cl.bleuFantome,
+                            borderRadius: Rayons.brPilule,
+                          ),
+                          child: Text(
+                            'candidat',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              color: context.cl.bleuTexte,
+                            ),
+                          ),
+                        ),
+                      ],
                       if (m.estAdmin) ...[
                         const SizedBox(width: 6),
                         Container(
@@ -333,12 +449,35 @@ class _LigneMembre extends StatelessWidget {
                       ],
                     ],
                   ),
-                  if (m.telephone.isNotEmpty)
-                    Text(
-                      m.telephone,
-                      style:
-                          TextStyle(fontSize: 11.5, color: context.cl.grise),
-                    ),
+                  Row(
+                    children: [
+                      if (m.telephone.isNotEmpty)
+                        Text(
+                          m.telephone,
+                          style: TextStyle(
+                              fontSize: 11.5, color: context.cl.grise),
+                        ),
+                      if (onClasser != null) ...[
+                        if (m.telephone.isNotEmpty)
+                          Text(' • ',
+                              style: TextStyle(
+                                  fontSize: 11.5, color: context.cl.grise)),
+                        InkWell(
+                          onTap: onClasser,
+                          borderRadius: Rayons.brPilule,
+                          child: Text(
+                            m.estEntreprise ? 'entreprise' : 'particulier',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.underline,
+                              color: context.cl.accentTexte,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),

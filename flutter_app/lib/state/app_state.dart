@@ -186,6 +186,7 @@ class AppState extends ChangeNotifier {
     required String telephone,
     required String niu,
     required String motDePasse,
+    TypeClient typeClient = TypeClient.particulier,
     List<PieceEnvoi> pieces = const [],
   }) async {
     _compte = await _backend.inscription(
@@ -196,6 +197,7 @@ class AppState extends ChangeNotifier {
       telephone: telephone,
       niu: niu,
       motDePasse: motDePasse,
+      typeClient: typeClient,
       pieces: pieces,
     );
     await _chargerContenu();
@@ -338,6 +340,72 @@ class AppState extends ChangeNotifier {
   /// propre ligne ; le refus remonte en [ErreurBackend] affichable.
   Future<void> nommerConseiller(String compteId, bool conseiller) =>
       _backend.nommerConseiller(compteId, conseiller);
+
+  /* ---------------------------------------------------------------------- */
+  /*  Paiements                                                             */
+  /* ---------------------------------------------------------------------- */
+  //  Rien ici ne verifie qui a le droit de quoi : la base refuse, et le
+  //  refus remonte en ErreurBackend affichable.
+
+  Future<List<MoyenPaiement>> moyensPaiement() => _backend.moyensPaiement();
+
+  /// Le prix d'un service pour la personne connectée, ou `null` s'il est
+  /// gratuit pour elle.
+  Future<int?> monTarif(String serviceId) => _backend.monTarif(serviceId);
+
+  Future<List<TarifService>> tarifs() => _backend.tarifs();
+
+  Future<Facture?> factureDuDossier(String demandeId) =>
+      _backend.factureDuDossier(demandeId);
+
+  Future<List<Facture>> mesFactures() => _backend.mesFactures();
+
+  Future<List<Facture>> factures() => _backend.listerFactures();
+
+  Future<void> annulerFacture(String factureId) =>
+      _backend.annulerFacture(factureId);
+
+  /// Le client declare avoir paye. Le montant est fixe par la base.
+  Future<void> declarerPaiement({
+    required String factureId,
+    required String operateur,
+    required String numeroEnvoyeur,
+    required String reference,
+  }) =>
+      _backend.declarerPaiement(
+        factureId: factureId,
+        operateur: operateur,
+        numeroEnvoyeur: numeroEnvoyeur,
+        reference: reference,
+      );
+
+  Future<List<Paiement>> paiementsDuDossier(String demandeId) =>
+      _backend.paiementsDuDossier(demandeId);
+
+  Future<List<Paiement>> paiements() => _backend.listerPaiements();
+
+  Future<void> statuerPaiement(String paiementId, bool confirme,
+          {String motif = ''}) =>
+      _backend.statuerPaiement(paiementId, confirme, motif: motif);
+
+  Future<void> definirTypeClient(String compteId, TypeClient type) =>
+      _backend.definirTypeClient(compteId, type);
+
+  Future<void> definirTarif(
+    String serviceId,
+    int particulier,
+    int entreprise,
+    bool actif,
+  ) =>
+      _backend.definirTarif(serviceId, particulier, entreprise, actif);
+
+  Future<void> definirMoyen(
+    String moyenId,
+    String codeUssd,
+    String beneficiaire,
+    bool actif,
+  ) =>
+      _backend.definirMoyen(moyenId, codeUssd, beneficiaire, actif);
 
   /* ---------------------------------------------------------------------- */
   /*  Documents                                                             */

@@ -1,5 +1,11 @@
 import 'dart:typed_data';
 
+/// Ce que le client est, pour la facturation.
+///
+/// À ne pas confondre avec [Role], qui dit quelles pièces on lui demande :
+/// un salarié coche « Personne employée » mais reste un particulier.
+enum TypeClient { particulier, entreprise }
+
 /// Rôle choisi à l'inscription : client ou personne employée.
 ///
 /// Purement déclaratif : il ne donne aucun privilège. Le droit de consulter
@@ -78,6 +84,7 @@ class Compte {
     required this.creeLe,
     this.estAgent = false,
     this.estAdmin = false,
+    this.typeClient = TypeClient.particulier,
   });
 
   /// L'identifiant du compte dans `auth.users`. Sert notamment à ne pas
@@ -99,6 +106,10 @@ class Compte {
   /// les clients. Ne se règle que depuis le tableau de bord Supabase, ou
   /// par un [estAdmin] depuis l'écran Équipe.
   final bool estAgent;
+
+  /// Particulier ou entreprise — c'est ce qui décide du tarif. Le client
+  /// ne peut pas le changer lui-même : sans quoi il choisirait son prix.
+  final TypeClient typeClient;
 
   /// Administrateur : nomme les conseillers, et rien d'autre. Il ne voit ni
   /// les dossiers ni les conversations, sauf s'il est aussi conseiller.
@@ -122,6 +133,7 @@ class Compte {
         'niu': niu,
         'estAgent': estAgent,
         'estAdmin': estAdmin,
+        'typeClient': typeClient.name,
         'pieces': pieces.map((p) => p.versJson()).toList(),
         'creeLe': creeLe,
       };
@@ -139,6 +151,10 @@ class Compte {
         niu: j['niu'] as String? ?? '',
         estAgent: j['estAgent'] as bool? ?? false,
         estAdmin: j['estAdmin'] as bool? ?? false,
+        typeClient: TypeClient.values.firstWhere(
+          (t) => t.name == j['typeClient'],
+          orElse: () => TypeClient.particulier,
+        ),
         pieces: ((j['pieces'] as List<dynamic>?) ?? const [])
             .map((e) => Piece.depuisJson(e as Map<String, dynamic>))
             .toList(),
@@ -309,6 +325,8 @@ class MembreEquipe {
     required this.telephone,
     required this.estAgent,
     required this.estAdmin,
+    this.role = Role.utilisateur,
+    this.typeClient = TypeClient.particulier,
   });
 
   final String id;
@@ -317,6 +335,15 @@ class MembreEquipe {
   final String telephone;
   final bool estAgent;
   final bool estAdmin;
+  final Role role;
+  final TypeClient typeClient;
+
+  /// A rempli le formulaire de conseiller, sans être encore habilité.
+  ///
+  /// C'est la pile de candidatures que l'administrateur vient valider.
+  bool get estCandidat => role == Role.employe && !estAgent;
+
+  bool get estEntreprise => typeClient == TypeClient.entreprise;
 
   String get nomComplet {
     final n = '$prenom $nom'.trim();
@@ -330,12 +357,188 @@ class MembreEquipe {
     return i.isEmpty ? '?' : i;
   }
 
-  MembreEquipe avec({bool? estAgent}) => MembreEquipe(
+  MembreEquipe avec({bool? estAgent, TypeClient? typeClient}) =>
+      MembreEquipe(
         id: id,
         nom: nom,
         prenom: prenom,
         telephone: telephone,
         estAgent: estAgent ?? this.estAgent,
         estAdmin: estAdmin,
+        role: role,
+        typeClient: typeClient ?? this.typeClient,
       );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Paiements                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/// Un moyen de paiement de l'agence, tel qu'il est enregistré en base.
+///
+/// Le code USSD et le bénéficiaire ne vivent pas dans l'application : un
+/// changement de numéro marchand ne doit pas obliger tous les clients à
+/// réinstaller.
+class MoyenPaiement {
+  const MoyenPaiement({
+    required this.id,
+    required this.libelle,
+    required this.codeUssd,
+    required this.beneficiaire,
+    required this.consigne,
+  });
+
+  final String id;
+  final String libelle;
+  final String codeUssd;
+  final String beneficiaire;
+  final String consigne;
+
+  bool get estOrange => id == 'orange';
+}
+
+/// Le prix d'un service.
+class Tarif {
+  const Tarif({
+    required this.serviceId,
+    required this.libelle,
+    required this.montant,
+  });
+
+  final String serviceId;
+  final String libelle;
+  final int montant;
+
+  String get formate => montantEnFcfa(montant);
+}
+
+/// Où en est une déclaration de versement.
+enum StatutPaiement {
+  /// Le client affirme avoir payé ; l'agence n'a rien vérifié.
+  declare,
+
+  /// Un administrateur a retrouvé l'opération sur le relevé.
+  confirme,
+
+  /// L'opération n'a pas été retrouvée.
+  rejete,
+}
+
+/// Un versement déclaré par un client.
+class Paiement {
+  const Paiement({
+    required this.id,
+    required this.montant,
+    required this.operateur,
+    required this.statut,
+    required this.date,
+    this.numeroEnvoyeur = '',
+    this.reference = '',
+    this.motif = '',
+    this.clientNom = '',
+    this.demandeId = '',
+    this.serviceLibelle = '',
+  });
+
+  final String id;
+  final int montant;
+  final String operateur;
+  final StatutPaiement statut;
+  final String date;
+  final String numeroEnvoyeur;
+  final String reference;
+
+  /// Renseigné en cas de rejet.
+  final String motif;
+
+  /// Renseignés pour l'écran d'administration.
+  final String clientNom;
+  final String demandeId;
+  final String serviceLibelle;
+
+  bool get enAttente => statut == StatutPaiement.declare;
+
+  String get montantFormate => montantEnFcfa(montant);
+
+  String get libelleStatut => switch (statut) {
+        StatutPaiement.declare => 'En attente de vérification',
+        StatutPaiement.confirme => 'Paiement confirmé',
+        StatutPaiement.rejete => 'Paiement rejeté',
+      };
+}
+
+/// Où en est une facture.
+enum StatutFacture { aPayer, payee, annulee }
+
+/// Ce qu'un dossier a coûté, émis dès son dépôt.
+///
+/// La facture naît d'un déclencheur en base, pas d'un appel de
+/// l'application : la dette ne dépend pas du bon vouloir du client.
+class Facture {
+  const Facture({
+    required this.id,
+    required this.numero,
+    required this.montant,
+    required this.statut,
+    required this.date,
+    this.serviceLibelle = '',
+    this.demandeId = '',
+    this.clientNom = '',
+  });
+
+  final String id;
+  final String numero;
+  final int montant;
+  final StatutFacture statut;
+  final String date;
+  final String serviceLibelle;
+  final String demandeId;
+  final String clientNom;
+
+  bool get aPayer => statut == StatutFacture.aPayer;
+
+  String get montantFormate => montantEnFcfa(montant);
+
+  String get libelleStatut => switch (statut) {
+        StatutFacture.aPayer => 'À payer',
+        StatutFacture.payee => 'Payée',
+        StatutFacture.annulee => 'Annulée',
+      };
+
+  static StatutFacture statutDepuis(String? brut) => switch (brut) {
+        'payee' => StatutFacture.payee,
+        'annulee' => StatutFacture.annulee,
+        _ => StatutFacture.aPayer,
+      };
+}
+
+/// Le prix d'un service pour les deux profils, tel que l'administrateur le
+/// règle.
+class TarifService {
+  const TarifService({
+    required this.serviceId,
+    required this.libelle,
+    required this.particulier,
+    required this.entreprise,
+    required this.actif,
+  });
+
+  final String serviceId;
+  final String libelle;
+  final int particulier;
+  final int entreprise;
+  final bool actif;
+
+  bool get gratuit => particulier == 0 && entreprise == 0;
+}
+
+/// « 25 000 FCFA » — espaces fines insécables entre les milliers.
+String montantEnFcfa(int montant) {
+  final chiffres = montant.toString();
+  final tampon = StringBuffer();
+  for (var i = 0; i < chiffres.length; i++) {
+    if (i > 0 && (chiffres.length - i) % 3 == 0) tampon.write('\u202F');
+    tampon.write(chiffres[i]);
+  }
+  return '$tampon FCFA';
 }

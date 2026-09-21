@@ -62,6 +62,15 @@ class BackendSupabase implements Backend {
           'Internet.';
     }
     if (m.contains('seul un administrateur') ||
+        m.contains('classification') ||
+        m.contains('moyen de paiement') ||
+        m.contains('aucun tarif') ||
+        m.contains('facture') ||
+        m.contains('service inconnu') ||
+        m.contains('dossier introuvable') ||
+        m.contains('montant ne peut pas') ||
+        m.contains('est deja enregistre') ||
+        m.contains('deja traitee') ||
         m.contains('votre propre habilitation') ||
         m.contains('compte introuvable')) {
       return message; // Déjà rédigé en français par la base.
@@ -265,7 +274,8 @@ class BackendSupabase implements Backend {
   Future<Compte> _compteDepuisProfil(String uid, String email) async {
     final ligne = await _client
         .from('profiles')
-        .select('role, nom, prenom, telephone, niu, est_agent, est_admin, cree_le')
+        .select('role, nom, prenom, telephone, niu, est_agent, est_admin, '
+            'type_client, cree_le')
         .eq('id', uid)
         .single();
 
@@ -282,6 +292,10 @@ class BackendSupabase implements Backend {
       niu: ligne['niu'] as String? ?? '',
       estAgent: ligne['est_agent'] as bool? ?? false,
       estAdmin: ligne['est_admin'] as bool? ?? false,
+      typeClient: TypeClient.values.firstWhere(
+        (t) => t.name == ligne['type_client'],
+        orElse: () => TypeClient.particulier,
+      ),
       pieces: await _piecesDuCompte(uid),
       creeLe: _dateFr(ligne['cree_le'] as String?),
     );
@@ -309,6 +323,7 @@ class BackendSupabase implements Backend {
     required String telephone,
     required String niu,
     required String motDePasse,
+    TypeClient typeClient = TypeClient.particulier,
     List<PieceEnvoi> pieces = const [],
   }) {
     return _garder(() async {
@@ -317,6 +332,7 @@ class BackendSupabase implements Backend {
         password: motDePasse,
         data: {
           'role': role.name,
+          'type_client': typeClient.name,
           'nom': nom,
           'prenom': prenom,
           'telephone': telephone,
@@ -644,7 +660,8 @@ class BackendSupabase implements Backend {
       // verrait que sa propre ligne.
       final lignes = await _client
           .from('profiles')
-          .select('id, nom, prenom, telephone, est_agent, est_admin')
+          .select('id, nom, prenom, telephone, est_agent, est_admin, '
+              'role, type_client')
           .order('est_agent', ascending: false)
           .order('nom', ascending: true);
 
@@ -657,6 +674,14 @@ class BackendSupabase implements Backend {
             telephone: l['telephone'] as String? ?? '',
             estAgent: l['est_agent'] as bool? ?? false,
             estAdmin: l['est_admin'] as bool? ?? false,
+            role: Role.values.firstWhere(
+              (r) => r.name == l['role'],
+              orElse: () => Role.utilisateur,
+            ),
+            typeClient: TypeClient.values.firstWhere(
+              (t) => t.name == l['type_client'],
+              orElse: () => TypeClient.particulier,
+            ),
           ),
       ];
     });
@@ -670,6 +695,246 @@ class BackendSupabase implements Backend {
         'conseiller': conseiller,
       });
     });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /*  Paiements                                                             */
+  /* ---------------------------------------------------------------------- */
+
+  @override
+  Future<List<MoyenPaiement>> moyensPaiement() {
+    return _garder(() async {
+      final lignes = await _client
+          .from('moyens_paiement')
+          .select('id, libelle, code_ussd, beneficiaire, consigne')
+          .eq('actif', true)
+          .order('ordre');
+
+      return [
+        for (final l in lignes)
+          MoyenPaiement(
+            id: l['id'] as String? ?? '',
+            libelle: l['libelle'] as String? ?? '',
+            codeUssd: l['code_ussd'] as String? ?? '',
+            beneficiaire: l['beneficiaire'] as String? ?? '',
+            consigne: l['consigne'] as String? ?? '',
+          ),
+      ];
+    });
+  }
+
+  @override
+  Future<int?> monTarif(String serviceId) {
+    return _garder(() async {
+      final v = await _client.rpc('mon_tarif', params: {'service': serviceId});
+      final n = (v as num?)?.toInt();
+      return (n == null || n == 0) ? null : n;
+    });
+  }
+
+  @override
+  Future<List<TarifService>> tarifs() {
+    return _garder(() async {
+      final lignes = await _client
+          .from('tarifs')
+          .select('service_id, libelle, montant_particulier, '
+              'montant_entreprise, actif')
+          .order('libelle');
+      return [
+        for (final l in lignes)
+          TarifService(
+            serviceId: l['service_id'] as String? ?? '',
+            libelle: l['libelle'] as String? ?? '',
+            particulier: (l['montant_particulier'] as num?)?.toInt() ?? 0,
+            entreprise: (l['montant_entreprise'] as num?)?.toInt() ?? 0,
+            actif: l['actif'] as bool? ?? false,
+          ),
+      ];
+    });
+  }
+
+  static const _champsFacture =
+      'id, numero, montant, statut, cree_le, service_libelle, demande_id';
+
+  static Facture _facture(Map<String, dynamic> l) => Facture(
+        id: l['id'] as String? ?? '',
+        numero: l['numero'] as String? ?? '',
+        montant: (l['montant'] as num?)?.toInt() ?? 0,
+        statut: Facture.statutDepuis(l['statut'] as String?),
+        date: _dateFr(l['cree_le'] as String?),
+        serviceLibelle: l['service_libelle'] as String? ?? '',
+        demandeId: l['demande_id'] as String? ?? '',
+        clientNom: _nomProfil(l['profiles'] as Map<String, dynamic>?),
+      );
+
+  @override
+  Future<Facture?> factureDuDossier(String demandeId) {
+    return _garder(() async {
+      final l = await _client
+          .from('factures')
+          .select(_champsFacture)
+          .eq('demande_id', demandeId)
+          .maybeSingle();
+      return l == null ? null : _facture(l);
+    });
+  }
+
+  @override
+  Future<List<Facture>> mesFactures() {
+    return _garder(() async {
+      final lignes = await _client
+          .from('factures')
+          .select(_champsFacture)
+          .eq('user_id', _idUtilisateur())
+          .order('cree_le', ascending: false);
+      return [for (final l in lignes) _facture(l)];
+    });
+  }
+
+  @override
+  Future<List<Facture>> listerFactures() {
+    return _garder(() async {
+      // Pas de filtre : la RLS ne sert la totalite qu'aux agents et admins.
+      final lignes = await _client
+          .from('factures')
+          .select('$_champsFacture, profiles(nom, prenom)')
+          .order('cree_le', ascending: false);
+      return [for (final l in lignes) _facture(l)];
+    });
+  }
+
+  @override
+  Future<void> annulerFacture(String factureId) {
+    return _garder(() async {
+      await _client.rpc('annuler_facture', params: {'facture': factureId});
+    });
+  }
+
+  @override
+  Future<void> declarerPaiement({
+    required String factureId,
+    required String operateur,
+    required String numeroEnvoyeur,
+    required String reference,
+  }) {
+    return _garder(() async {
+      await _client.rpc('declarer_paiement', params: {
+        'facture': factureId,
+        'moyen': operateur,
+        'numero': numeroEnvoyeur,
+        'ref': reference,
+      });
+    });
+  }
+
+  @override
+  Future<List<Paiement>> paiementsDuDossier(String demandeId) {
+    return _garder(() async {
+      final lignes = await _client
+          .from('paiements')
+          .select(_champsPaiement)
+          .eq('demande_id', demandeId)
+          .order('cree_le', ascending: false);
+      return [for (final l in lignes) _paiement(l)];
+    });
+  }
+
+  @override
+  Future<List<Paiement>> listerPaiements() {
+    return _garder(() async {
+      // Pas de filtre : la RLS ne sert la totalite qu'aux agents et admins.
+      final lignes = await _client
+          .from('paiements')
+          // `paiements` pointe deux fois vers `profiles` — par `user_id` et
+          // par `statue_par`. PostgREST refuse de deviner : on nomme la
+          // contrainte à suivre.
+          .select('$_champsPaiement, '
+              'profiles!paiements_user_id_fkey(nom, prenom), '
+              'demandes(service_label)')
+          .order('cree_le', ascending: false);
+      return [for (final l in lignes) _paiement(l)];
+    });
+  }
+
+  @override
+  Future<void> statuerPaiement(String paiementId, bool confirme,
+      {String motif = ''}) {
+    return _garder(() async {
+      await _client.rpc('statuer_paiement', params: {
+        'paiement': paiementId,
+        'nouveau_statut': confirme ? 'confirme' : 'rejete',
+        'motif_rejet': motif,
+      });
+    });
+  }
+
+  @override
+  Future<void> definirTypeClient(String compteId, TypeClient type) {
+    return _garder(() async {
+      await _client.rpc('definir_type_client', params: {
+        'cible': compteId,
+        'type_c': type.name,
+      });
+    });
+  }
+
+  @override
+  Future<void> definirTarif(
+    String serviceId,
+    int particulier,
+    int entreprise,
+    bool actif,
+  ) {
+    return _garder(() async {
+      await _client.rpc('definir_tarif', params: {
+        'service': serviceId,
+        'prix_particulier': particulier,
+        'prix_entreprise': entreprise,
+        'disponible': actif,
+      });
+    });
+  }
+
+  @override
+  Future<void> definirMoyen(
+    String moyenId,
+    String codeUssd,
+    String beneficiaire,
+    bool actif,
+  ) {
+    return _garder(() async {
+      await _client.rpc('definir_moyen', params: {
+        'moyen': moyenId,
+        'code': codeUssd,
+        'nom_beneficiaire': beneficiaire,
+        'disponible': actif,
+      });
+    });
+  }
+
+  static const _champsPaiement =
+      'id, demande_id, montant, operateur, statut, motif, '
+      'numero_envoyeur, reference, cree_le';
+
+  static Paiement _paiement(Map<String, dynamic> l) {
+    final profil = l['profiles'] as Map<String, dynamic>?;
+    final demande = l['demandes'] as Map<String, dynamic>?;
+    return Paiement(
+      id: l['id'] as String? ?? '',
+      montant: (l['montant'] as num?)?.toInt() ?? 0,
+      operateur: l['operateur'] as String? ?? '',
+      statut: StatutPaiement.values.firstWhere(
+        (s) => s.name == l['statut'],
+        orElse: () => StatutPaiement.declare,
+      ),
+      date: _dateFr(l['cree_le'] as String?),
+      numeroEnvoyeur: l['numero_envoyeur'] as String? ?? '',
+      reference: l['reference'] as String? ?? '',
+      motif: l['motif'] as String? ?? '',
+      clientNom: _nomProfil(profil),
+      demandeId: l['demande_id'] as String? ?? '',
+      serviceLibelle: demande?['service_label'] as String? ?? '',
+    );
   }
 
   /* ---------------------------------------------------------------------- */

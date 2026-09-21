@@ -7,12 +7,6 @@ import '../widgets/communs.dart';
 import '../widgets/envoi_demande.dart';
 import '../widgets/coquille.dart';
 
-const _operateurs = <String>[
-  'MTN Mobile Money',
-  'Orange Money',
-  'Virement bancaire',
-];
-
 class PageAudit extends StatefulWidget {
   const PageAudit({super.key});
 
@@ -28,11 +22,6 @@ class _PageAuditState extends State<PageAudit> with EnvoiDemande {
   String _erreur = '';
   final _fichiers = <String, FichierChoisi>{};
 
-  // Paiement de la caution
-  bool _paiementOuvert = false;
-  String _operateur = '';
-  bool _cautionPayee = false;
-
   @override
   void dispose() {
     _structure.dispose();
@@ -41,28 +30,11 @@ class _PageAuditState extends State<PageAudit> with EnvoiDemande {
     super.dispose();
   }
 
-  void _payerCaution() {
-    if (_operateur.isEmpty || _telephone.text.trim().isEmpty) {
-      setState(() => _erreur = 'Choisissez un moyen de paiement et saisissez '
-          'le numéro à débiter.');
-      return;
-    }
-    setState(() {
-      _cautionPayee = true;
-      _paiementOuvert = false;
-      _erreur = '';
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Caution enregistrée via $_operateur.')),
-    );
-  }
-
   Future<void> _envoyer() async {
     final manquants = <String>[
       if (_structure.text.trim().isEmpty) 'Nom de la structure',
       if (_type == null) "Type d'audit",
       if (_niu.text.trim().isEmpty) 'NIU',
-      if (!_cautionPayee) 'Paiement de caution',
     ];
     if (manquants.isNotEmpty) {
       setState(() => _erreur = 'À compléter : ${manquants.join(', ')}.');
@@ -76,11 +48,10 @@ class _PageAuditState extends State<PageAudit> with EnvoiDemande {
     await envoyerDemande(
       serviceId: 'audit',
       serviceLibelle: 'Faire un audit',
-      resume: '$_type — ${_structure.text} — NIU ${_niu.text} — '
-          'caution réglée ($_operateur)',
+      resume: '$_type — ${_structure.text} — NIU ${_niu.text}',
       pieces: pieces,
-      confirmation: "Demande d'audit envoyée "
-            '(${pieces.length} document(s)).',
+      confirmation: "Dossier enregistré. Réglez la caution pour qu'un "
+          'conseiller le prenne en charge.',
       surErreur: (m) => setState(() => _erreur = m),
     );
   }
@@ -108,60 +79,34 @@ class _PageAuditState extends State<PageAudit> with EnvoiDemande {
               const SizedBox(height: 22),
               Champ(libelle: 'NIU', controleur: _niu, encadre: true),
               const SizedBox(height: 22),
-              Material(
-                color: _cautionPayee
-                    ? const Color(0xFF3F9E63)
-                    : Palette.orangeClair,
-                borderRadius: BorderRadius.circular(12),
-                elevation: 1,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () =>
-                      setState(() => _paiementOuvert = !_paiementOuvert),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    child: Text(
-                      _cautionPayee ? '✓ CAUTION PAYÉE' : 'PAIEMENT DE CAUTION',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
+              Container(
+                padding: const EdgeInsets.all(Espaces.lg),
+                decoration: BoxDecoration(
+                  color: context.cl.orangeFantome,
+                  borderRadius: Rayons.brLg,
+                  border: Border.all(
+                      color: context.cl.accentTexte.withValues(alpha: 0.35)),
                 ),
-              ),
-              if (_paiementOuvert && !_cautionPayee) ...[
-                const SizedBox(height: 16),
-                Encadre(
-                  marge: EdgeInsets.zero,
-                  enfants: [
-                    Text('MOYEN DE PAIEMENT', style: Textes.libelle(context)),
-                    const SizedBox(height: 10),
-                    Pastilles(
-                      options: _operateurs,
-                      selection: _operateur.isEmpty ? const [] : [_operateur],
-                      larges: true,
-                      onBascule: (v) => setState(
-                        () => _operateur = _operateur == v ? '' : v,
+                child: Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet_outlined,
+                        size: 20, color: context.cl.accentTexte),
+                    const SizedBox(width: Espaces.md),
+                    Expanded(
+                      child: Text(
+                        'Une caution est demandée pour cet audit. Vous la '
+                        'réglerez par mobile money juste après l\'envoi du '
+                        'dossier.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          height: 1.45,
+                          color: context.cl.encreDouce,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 18),
-                    Champ(
-                      libelle: 'Numéro à débiter',
-                      controleur: _telephone,
-                      clavier: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 18),
-                    BoutonEnvoyer(
-                      onTap: _payerCaution,
-                      libelle: 'Valider le paiement',
-                      bloc: true,
                     ),
                   ],
                 ),
-              ],
+              ),
             ],
           ),
         ),

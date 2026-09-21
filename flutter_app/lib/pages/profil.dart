@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/api.dart';
 import '../models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -15,14 +16,28 @@ class PageProfil extends StatefulWidget {
 }
 
 class _PageProfilState extends State<PageProfil> {
+  List<Facture> _factures = const [];
+
   @override
   void initState() {
     super.initState();
     // Le statut d'un dossier est décidé par nos services, pas par le client :
     // sans cette relecture, un passage en « Traitée » ne se verrait jamais.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) PorteeApp.of(context).rafraichirDemandes();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _rafraichir());
+  }
+
+  Future<void> _rafraichir() async {
+    if (!mounted) return;
+    final etat = PorteeApp.of(context);
+    await etat.rafraichirDemandes();
+    if (!mounted || !etat.connecte) return;
+    try {
+      final f = await etat.mesFactures();
+      if (mounted) setState(() => _factures = f);
+    } on ErreurBackend {
+      // Un profil qui s'affiche sans ses factures reste utile : on ne
+      // bloque pas l'écran entier pour ça.
+    }
   }
 
   @override
@@ -350,6 +365,70 @@ class _PageProfilState extends State<PageProfil> {
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                Espaces.bord, Espaces.sm, Espaces.bord, 0),
+            child: Material(
+              color: context.cl.carte,
+              borderRadius: Rayons.brLg,
+              child: InkWell(
+                borderRadius: Rayons.brLg,
+                onTap: () =>
+                    Navigator.of(context).pushNamed('/admin/paiements'),
+                child: Container(
+                  padding: const EdgeInsets.all(Espaces.lg),
+                  decoration: BoxDecoration(
+                    borderRadius: Rayons.brLg,
+                    border: Border.all(color: context.cl.ligne),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: context.cl.orangeFantome,
+                          borderRadius: Rayons.r(10),
+                        ),
+                        child: Icon(Icons.receipt_long_outlined,
+                            size: 19, color: context.cl.accentTexte),
+                      ),
+                      const SizedBox(width: Espaces.md),
+                      const Expanded(
+                        child: Text(
+                          'Paiements et tarifs',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          color: context.cl.grise),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+
+        // ── Factures ──────────────────────────────────────────────────
+        if (_factures.isNotEmpty) ...[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(
+                Espaces.bord, Espaces.xxl, Espaces.bord, Espaces.md),
+            child: Text(
+              'Mes factures',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+          for (final f in _factures)
+            _CarteFacture(facture: f, surRetour: _rafraichir),
         ],
 
         // ── Déconnexion ───────────────────────────────────────────────
@@ -599,4 +678,106 @@ class _CarteDemande extends StatelessWidget {
         'Traitée' => Palette.succes,
         _ => Palette.orange,
       };
+}
+
+/// Une facture du client : son numéro, son montant, et de quoi la régler.
+class _CarteFacture extends StatelessWidget {
+  const _CarteFacture({required this.facture, required this.surRetour});
+
+  final Facture facture;
+
+  /// Rappelé au retour du paiement : le statut a pu changer.
+  final Future<void> Function() surRetour;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = context.cl;
+    final f = facture;
+    final (accent, fond) = switch (f.statut) {
+      StatutFacture.payee => (n.succesTexte, n.succesFantome),
+      StatutFacture.annulee => (n.grise, n.fondDoux),
+      StatutFacture.aPayer => (n.accentTexte, n.orangeFantome),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Espaces.bord, 0, Espaces.bord, 10),
+      child: Container(
+        padding: const EdgeInsets.all(Espaces.lg),
+        decoration: BoxDecoration(
+          color: n.carte,
+          borderRadius: Rayons.brLg,
+          border: Border.all(color: n.ligne),
+          boxShadow: n.ombreCarte,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        f.montantFormate,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          color: n.encre,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${f.numero}  •  ${f.serviceLibelle}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12, color: n.encreDouce),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: fond,
+                    borderRadius: Rayons.brPilule,
+                  ),
+                  child: Text(
+                    f.libelleStatut,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: accent,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (f.aPayer) ...[
+              const SizedBox(height: Espaces.md),
+              BoutonEnvoyer(
+                bloc: true,
+                libelle: 'Régler cette facture',
+                icone: Icons.account_balance_wallet_outlined,
+                onTap: () async {
+                  await Navigator.of(context).pushNamed(
+                    '/paiement',
+                    arguments: (
+                      demandeId: f.demandeId,
+                      serviceId: '',
+                      serviceLibelle: f.serviceLibelle,
+                    ),
+                  );
+                  await surRetour();
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

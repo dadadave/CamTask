@@ -44,6 +44,7 @@ abstract class Backend {
     required String telephone,
     required String niu,
     required String motDePasse,
+    TypeClient typeClient,
     List<PieceEnvoi> pieces,
   });
 
@@ -125,6 +126,73 @@ abstract class Backend {
   /// depuis l'application : c'est ce qui empêche de rouvrir la faille où
   /// n'importe qui se promouvait en modifiant son propre profil.
   Future<void> nommerConseiller(String compteId, bool conseiller);
+
+  /* ---------------------------------------------------------------------- */
+  /*  Paiements                                                             */
+  /* ---------------------------------------------------------------------- */
+
+  /// Les moyens de paiement actifs de l'agence, avec leur code USSD.
+  Future<List<MoyenPaiement>> moyensPaiement();
+
+  /// Le tarif d'un service **pour celui qui demande** — particulier ou
+  /// entreprise. Nul si le service est gratuit pour lui.
+  Future<int?> monTarif(String serviceId);
+
+  /// Les prix des 7 services, pour l'ecran de reglages.
+  Future<List<TarifService>> tarifs();
+
+  /// La facture d'un dossier, s'il en a une.
+  Future<Facture?> factureDuDossier(String demandeId);
+
+  /// Les factures de la personne connectee, la plus recente d'abord.
+  Future<List<Facture>> mesFactures();
+
+  /// Toutes les factures, pour l'administration.
+  Future<List<Facture>> listerFactures();
+
+  /// Annule une facture restee impayee. Reserve aux administrateurs.
+  Future<void> annulerFacture(String factureId);
+
+  /// Le client affirme avoir paye.
+  ///
+  /// La base fixe elle-meme le montant depuis le tarif : il ne vient jamais
+  /// de l'application, qui pourrait en annoncer un autre.
+  Future<void> declarerPaiement({
+    required String factureId,
+    required String operateur,
+    required String numeroEnvoyeur,
+    required String reference,
+  });
+
+  /// Les declarations rattachees a un dossier.
+  Future<List<Paiement>> paiementsDuDossier(String demandeId);
+
+  /// Toutes les declarations, pour l'ecran d'administration.
+  Future<List<Paiement>> listerPaiements();
+
+  /// Confirme ou rejette une declaration. Reserve aux administrateurs.
+  Future<void> statuerPaiement(String paiementId, bool confirme,
+      {String motif});
+
+  /// Regle le prix d'un service. Reserve aux administrateurs.
+  /// Classe un compte en particulier ou en entreprise, ce qui decide
+  /// de ses tarifs. Reserve aux administrateurs.
+  Future<void> definirTypeClient(String compteId, TypeClient type);
+
+  Future<void> definirTarif(
+    String serviceId,
+    int particulier,
+    int entreprise,
+    bool actif,
+  );
+
+  /// Regle un moyen de paiement. Reserve aux administrateurs.
+  Future<void> definirMoyen(
+    String moyenId,
+    String codeUssd,
+    String beneficiaire,
+    bool actif,
+  );
 
   /* ---------------------------------------------------------------------- */
   /*  Documents                                                             */

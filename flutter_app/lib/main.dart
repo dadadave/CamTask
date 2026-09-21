@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'pages/accueil.dart';
 import 'pages/admin_equipe.dart';
+import 'pages/admin_paiements.dart';
+import 'pages/admin_reglages.dart';
 import 'pages/agent_chat.dart';
 import 'pages/agent_conversations.dart';
 import 'pages/agent_dossier.dart';
@@ -16,6 +18,7 @@ import 'pages/darp.dart';
 import 'pages/declarer.dart';
 import 'pages/dsf.dart';
 import 'pages/niu_acf.dart';
+import 'pages/paiement.dart';
 import 'pages/profil.dart';
 import 'pages/services.dart';
 import 'state/app_state.dart';
@@ -98,8 +101,15 @@ class MonComptable extends StatelessWidget {
               ),
           '/agent/chat': (_) => const ReserveAgent(child: PageAgentChat()),
 
+          // Régler une caution par mobile money.
+          '/paiement': (_) => const RequiertCompte(child: PagePaiement()),
+
           // Administration des habilitations.
           '/admin/equipe': (_) => const ReserveAdmin(child: PageAdminEquipe()),
+          '/admin/paiements': (_) =>
+              const ReserveAdmin(child: PageAdminPaiements()),
+          '/admin/reglages': (_) =>
+              const ReserveAdmin(child: PageAdminReglages()),
 
           // Les services exigent un compte.
           '/service/conseil-fiscal': (_) =>
