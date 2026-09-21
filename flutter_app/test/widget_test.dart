@@ -355,7 +355,8 @@ void main() {
 
     await tester.pumpWidget(MonComptable(etat: etat));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Profil'));
+    // Les onglets inactifs n'affichent plus leur libellé : on vise l'icône.
+    await tester.tap(find.byIcon(Icons.person_outline_rounded).last);
     await tester.pumpAndSettle();
 
     // La section des demandes est sous la ligne de flottaison (carte

@@ -483,26 +483,34 @@ InputBorder _bordure(Color c, [double w = 1]) => OutlineInputBorder(
       borderSide: BorderSide(color: c, width: w),
     );
 
+/// Attention au piège : `apply` pose une couleur sur tous les styles, mais
+/// le `copyWith` qui suit **remplace** entièrement ceux qu'il nomme. Un style
+/// redéfini sans `color` repart donc sur le blanc par défaut de Material, et
+/// tout texte qui s'en sert devient invisible sur fond clair. Chaque style
+/// redéfini ici porte donc sa couleur explicitement.
 TextTheme _typo(TextTheme base, Nuances n) =>
     base.apply(bodyColor: n.encre, displayColor: n.encre).copyWith(
-          headlineSmall: const TextStyle(
+          headlineSmall: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w800,
             height: 1.25,
             letterSpacing: -0.4,
+            color: n.encre,
           ),
-          titleLarge: const TextStyle(
+          titleLarge: TextStyle(
             fontSize: 19,
             fontWeight: FontWeight.w800,
             height: 1.3,
             letterSpacing: -0.2,
+            color: n.encre,
           ),
-          titleMedium: const TextStyle(
+          titleMedium: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,
             height: 1.35,
+            color: n.encre,
           ),
-          bodyMedium: const TextStyle(fontSize: 14, height: 1.55),
+          bodyMedium: TextStyle(fontSize: 14, height: 1.55, color: n.encre),
           bodySmall: TextStyle(
             fontSize: 12.5,
             height: 1.5,
@@ -517,6 +525,7 @@ TextTheme _typo(TextTheme base, Nuances n) =>
 class Textes {
   const Textes._();
 
+  /// Sans couleur : il hérite de `bodyMedium`, désormais encré.
   static const titreService = TextStyle(
     fontSize: 14.5,
     fontWeight: FontWeight.w700,

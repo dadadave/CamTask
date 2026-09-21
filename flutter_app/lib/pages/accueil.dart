@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../data/services.dart';
+import '../models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/bento.dart';
 import '../widgets/coquille.dart';
 
+/// L'accueil : l'accroche de l'agence, puis les 7 services.
+///
+/// La présentation a été reprise dans un style « bento » — dégradé maillé,
+/// grands rayons, tuiles claires — mais l'écran dit toujours la même chose
+/// et dans le même ordre : ce que nous promettons, puis ce que nous savons
+/// faire.
 class PageAccueil extends StatefulWidget {
   const PageAccueil({super.key});
 
@@ -21,85 +29,32 @@ class _PageAccueilState extends State<PageAccueil> {
     final terme = _recherche.trim().toLowerCase();
     final resultats = terme.isEmpty
         ? services
-        : services
-            .where((s) => '${s.libelle} ${s.sousTitre ?? ''}'
-                .toLowerCase()
-                .contains(terme))
-            .toList();
-
-    final prenom = etat.connecte
-        ? (etat.compte!.prenom.isNotEmpty
-            ? etat.compte!.prenom
-            : etat.compte!.nom)
-        : null;
+        : [
+            for (final s in services)
+              if ('${s.libelle} ${s.sousTitre ?? ''}'
+                  .toLowerCase()
+                  .contains(terme))
+                s,
+          ];
 
     return Scaffold(
-      // L'en-tête en dégradé remonte sous la barre d'état.
+      backgroundColor: context.cl.fond,
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 28),
+        padding: const EdgeInsets.only(bottom: 32),
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
         children: [
-          _EnTeteAccueil(
-            prenom: prenom,
+          _EnTete(
+            compte: etat.compte,
             onRecherche: (v) => setState(() => _recherche = v),
           ),
           const SizedBox(height: Espaces.xl),
-
           if (terme.isEmpty) ...[
-            const _CarteAccroche(),
+            const _Accroche(),
             const SizedBox(height: Espaces.xxl),
           ],
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Espaces.bord, 0, Espaces.bord, 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  terme.isEmpty
-                      ? 'Nos services'
-                      : '${resultats.length} résultat'
-                          '${resultats.length > 1 ? 's' : ''}',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                if (terme.isEmpty)
-                  TextButton(
-                    onPressed: () => Navigator.of(context)
-                        .pushNamedAndRemoveUntil('/services', (r) => false),
-                    child: const Text('Tout voir'),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: Espaces.md),
-
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: Espaces.bord),
-            child: GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: Espaces.md,
-              crossAxisSpacing: Espaces.md,
-              childAspectRatio: 1.05,
-              children: [
-                for (final s in resultats)
-                  _Tuile(
-                    service: s,
-                    onTap: () => Navigator.of(context).pushNamed(s.route),
-                  ),
-              ],
-            ),
-          ),
-
-          if (resultats.isEmpty) const _AucunResultat(),
+          _Catalogue(resultats: resultats, terme: terme),
         ],
       ),
       bottomNavigationBar: const NavigationBasse(routeCourante: '/accueil'),
@@ -107,25 +62,35 @@ class _PageAccueilState extends State<PageAccueil> {
   }
 }
 
-/// En-tête orange arrondi : salutation, actions et barre de recherche.
-class _EnTeteAccueil extends StatelessWidget {
-  const _EnTeteAccueil({required this.prenom, required this.onRecherche});
+/* -------------------------------------------------------------------------- */
+/*  En-tête                                                                   */
+/* -------------------------------------------------------------------------- */
 
-  final String? prenom;
+class _EnTete extends StatelessWidget {
+  const _EnTete({required this.compte, required this.onRecherche});
+
+  final Compte? compte;
   final ValueChanged<String> onRecherche;
+
+  String get _salutation {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Bonjour';
+    if (h < 18) return 'Bon après-midi';
+    return 'Bonsoir';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: Degrades.orange,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(Rayons.xl)),
-      ),
-      child: SafeArea(
+    final c = compte;
+    final prenom =
+        c == null ? null : (c.prenom.isNotEmpty ? c.prenom : c.nom);
+
+    return FondMaille(
+      enfant: SafeArea(
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
-              Espaces.bord, Espaces.md, Espaces.bord, Espaces.xl),
+              Espaces.bord, Espaces.lg, Espaces.bord, Espaces.xxl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -136,36 +101,35 @@ class _EnTeteAccueil extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          prenom == null ? 'Bienvenue' : 'Bonjour,',
+                          prenom == null
+                              ? _salutation
+                              : '$_salutation, $prenom',
                           style: TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w500,
-                            color: Colors.white.withValues(alpha: 0.85),
+                            color: context.cl.encreDouce,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
-                          prenom ?? 'CAM-TAXE',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Textes.titreEcran,
+                          'Mon Comptable',
+                          style: TextStyle(
+                            fontSize: 23,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6,
+                            height: 1.1,
+                            color: context.cl.encre,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  _BoutonRond(
-                    icone: Icons.notifications_none_rounded,
-                    onTap: () {},
-                  ),
-                  const SizedBox(width: Espaces.sm),
-                  _BoutonRond(
-                    icone: Icons.person_outline_rounded,
-                    onTap: () => Navigator.of(context).pushNamed('/profil'),
-                  ),
+                  const SizedBox(width: Espaces.md),
+                  _Avatar(compte: c),
                 ],
               ),
               const SizedBox(height: Espaces.xl),
-              _BarreRecherche(onChange: onRecherche),
+              _Recherche(onChange: onRecherche),
             ],
           ),
         ),
@@ -174,40 +138,84 @@ class _EnTeteAccueil extends StatelessWidget {
   }
 }
 
-class _BarreRecherche extends StatelessWidget {
-  const _BarreRecherche({required this.onChange});
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.compte});
+
+  final Compte? compte;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = compte;
+    return Material(
+      color: c == null ? context.cl.carte : Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () =>
+            Navigator.of(context).pushNamed(c == null ? '/auth' : '/profil'),
+        child: Container(
+          width: 46,
+          height: 46,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: c == null ? null : Degrades.orange,
+            border: c == null ? Border.all(color: context.cl.ligne) : null,
+            boxShadow: c == null ? null : ombreOrange,
+          ),
+          child: c == null
+              ? Icon(Icons.person_outline_rounded,
+                  size: 21, color: context.cl.encreDouce)
+              : Text(
+                  c.initiales,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Recherche extends StatelessWidget {
+  const _Recherche({required this.onChange});
 
   final ValueChanged<String> onChange;
 
   @override
   Widget build(BuildContext context) {
+    final n = context.cl;
     return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: Espaces.lg),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: context.cl.carte,
+        color: n.carte,
         borderRadius: Rayons.brPilule,
-        boxShadow: context.cl.ombreDouce,
+        border: Border.all(color: n.ligne),
+        boxShadow: n.ombreDouce,
       ),
       child: Row(
         children: [
-          Icon(Icons.search_rounded, size: 20, color: context.cl.grise),
-          const SizedBox(width: Espaces.md),
+          Icon(Icons.search_rounded, size: 20, color: n.grise),
+          const SizedBox(width: 10),
           Expanded(
             child: TextField(
-              decoration: const InputDecoration(
-                hintText: 'Rechercher un service…',
+              // `filled: false` est indispensable : le thème global remplit
+              // et borde tous les champs, ce qui dessinait ici une seconde
+              // boîte grise à l'intérieur de la pilule blanche.
+              decoration: InputDecoration(
+                hintText: 'Rechercher un service',
+                hintStyle: TextStyle(fontSize: 13.5, color: n.grise),
+                filled: false,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                filled: false,
                 isDense: true,
-                contentPadding: EdgeInsets.zero,
+                contentPadding: const EdgeInsets.symmetric(vertical: 15),
               ),
-              style: const TextStyle(
-                fontSize: 14.5,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(fontSize: 13.5),
               onChanged: onChange,
             ),
           ),
@@ -217,167 +225,59 @@ class _BarreRecherche extends StatelessWidget {
   }
 }
 
-/// Carte d'accroche sous l'en-tête.
-class _CarteAccroche extends StatelessWidget {
-  const _CarteAccroche();
+/* -------------------------------------------------------------------------- */
+/*  L'accroche                                                                */
+/* -------------------------------------------------------------------------- */
+
+/// La promesse de l'agence, telle qu'elle figure sur les maquettes.
+///
+/// C'est la première chose que lit un visiteur : elle garde sa place, ses
+/// mots et ses deux arguments. Seule sa présentation a changé.
+class _Accroche extends StatelessWidget {
+  const _Accroche();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: Espaces.bord),
-      padding: const EdgeInsets.all(Espaces.xl),
-      decoration: BoxDecoration(
-        color: context.cl.carte,
-        borderRadius: Rayons.brXl,
-        boxShadow: context.cl.ombreCarte,
-        border: Border.all(color: context.cl.ligne),
-      ),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Faites vos déclarations chez nous',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    height: 1.3,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                SizedBox(height: Espaces.md),
-                Row(
-                  children: [
-                    _Puce(icone: Icons.verified_rounded, texte: '100 % sûr'),
-                    SizedBox(width: Espaces.sm),
-                    _Puce(icone: Icons.bolt_rounded, texte: 'Rapide'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: Espaces.md),
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              gradient: Degrades.orange,
-              borderRadius: Rayons.brMd,
-              boxShadow: ombreOrange,
-            ),
-            child: const Icon(Icons.shield_outlined,
-                color: Colors.white, size: 28),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Puce extends StatelessWidget {
-  const _Puce({required this.icone, required this.texte});
-
-  final IconData icone;
-  final String texte;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: context.cl.orangeFantome,
-        borderRadius: Rayons.brPilule,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icone, size: 13, color: Palette.orange),
-          const SizedBox(width: 5),
-          Text(
-            texte,
-            style: const TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color: Palette.orange,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BoutonRond extends StatelessWidget {
-  const _BoutonRond({required this.icone, this.onTap});
-
-  final IconData icone;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.2),
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 42,
-          height: 42,
-          child: Icon(icone, size: 21, color: Colors.white),
-        ),
-      ),
-    );
-  }
-}
-
-/// Tuile de service : icône teintée, libellé, flèche.
-class _Tuile extends StatelessWidget {
-  const _Tuile({required this.service, required this.onTap});
-
-  final Service service;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: context.cl.carte,
-      borderRadius: Rayons.brLg,
-      child: InkWell(
-        borderRadius: Rayons.brLg,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(Espaces.lg),
-          decoration: BoxDecoration(
-            borderRadius: Rayons.brLg,
-            boxShadow: context.cl.ombreCarte,
-            border: Border.all(color: context.cl.ligne),
-          ),
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: Espaces.bord),
+      child: CarteMaille(
+        hauteur: 178,
+        enfant: Padding(
+          padding: EdgeInsets.all(22),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: service.accentFantome(context),
-                  borderRadius: Rayons.r(14),
-                ),
-                child: Icon(service.icone, size: 22, color: service.accent),
+              Row(
+                children: [
+                  PastilleIcone(
+                      icone: Icons.shield_outlined, surCouleur: true),
+                  Spacer(),
+                ],
               ),
-              const Spacer(),
+              Spacer(),
               Text(
-                service.libelle,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
-                  letterSpacing: -0.1,
+                'Faites vos déclarations chez nous',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
+                  height: 1.25,
+                  letterSpacing: -0.5,
                 ),
+              ),
+              SizedBox(height: Espaces.md),
+              Row(
+                children: [
+                  PuceArgument(
+                      icone: Icons.verified_rounded,
+                      texte: '100 % sûr',
+                      surCouleur: true),
+                  SizedBox(width: Espaces.sm),
+                  PuceArgument(
+                      icone: Icons.bolt_rounded,
+                      texte: 'Rapide',
+                      surCouleur: true),
+                ],
               ),
             ],
           ),
@@ -387,35 +287,112 @@ class _Tuile extends StatelessWidget {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Catalogue des services                                                    */
+/* -------------------------------------------------------------------------- */
+
+class _Catalogue extends StatelessWidget {
+  const _Catalogue({required this.resultats, required this.terme});
+
+  final List<Service> resultats;
+  final String terme;
+
+  @override
+  Widget build(BuildContext context) {
+    if (resultats.isEmpty) return const _AucunResultat();
+
+    // Le dernier service prend toute la largeur quand le compte est impair :
+    // ce déséquilibre assumé donne son allure à une grille bento, et il
+    // évite la tuile orpheline de l'ancienne disposition.
+    final impair = resultats.length.isOdd;
+    final grille =
+        impair ? resultats.sublist(0, resultats.length - 1) : resultats;
+    final dernier = impair ? resultats.last : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Espaces.bord),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TitreSection(
+            texte: terme.isEmpty
+                ? 'Nos services'
+                : '${resultats.length} résultat'
+                    '${resultats.length > 1 ? 's' : ''}',
+            action: terme.isEmpty
+                ? TextButton(
+                    onPressed: () => Navigator.of(context)
+                        .pushNamedAndRemoveUntil('/services', (r) => false),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child:
+                        const Text('Tout voir', style: TextStyle(fontSize: 13)),
+                  )
+                : null,
+          ),
+          for (var i = 0; i < grille.length; i += 2) ...[
+            if (i > 0) const SizedBox(height: Espaces.md),
+            Row(
+              children: [
+                Expanded(child: _tuile(context, grille[i])),
+                const SizedBox(width: Espaces.md),
+                Expanded(child: _tuile(context, grille[i + 1])),
+              ],
+            ),
+          ],
+          if (dernier != null) ...[
+            const SizedBox(height: Espaces.md),
+            BandeauBento(
+              icone: dernier.icone,
+              titre: dernier.libelle,
+              sousTitre: dernier.sousTitre,
+              onTap: () => Navigator.of(context).pushNamed(dernier.route),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _tuile(BuildContext context, Service s) => TuileService(
+        icone: s.icone,
+        libelle: s.libelle,
+        sousTitre: s.sousTitre,
+        teinte: s.accent == Palette.orange
+            ? context.cl.accentTexte
+            : context.cl.bleuTexte,
+        onTap: () => Navigator.of(context).pushNamed(s.route),
+      );
+}
+
 class _AucunResultat extends StatelessWidget {
   const _AucunResultat();
 
   @override
   Widget build(BuildContext context) {
+    final n = context.cl;
     return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: Espaces.bord, vertical: Espaces.xxl),
+      padding: const EdgeInsets.fromLTRB(
+          Espaces.bord, Espaces.xxl, Espaces.bord, Espaces.xxl),
       child: Column(
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: context.cl.orangeFantome,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.search_off_rounded,
-                size: 30, color: Palette.orange),
-          ),
+          const PastilleIcone(icone: Icons.search_off_rounded, taille: 56),
           const SizedBox(height: Espaces.lg),
-          const Text(
-            'Aucun service ne correspond',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 5),
           Text(
-            'Essayez un autre mot-clé.',
-            style: TextStyle(fontSize: 13, color: context.cl.encreDouce),
+            'Aucun service ne correspond',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: n.encre,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Essayez « DSF », « audit » ou « NIU ».',
+            style: TextStyle(fontSize: 13, color: n.encreDouce),
           ),
         ],
       ),

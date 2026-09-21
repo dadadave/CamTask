@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../data/services.dart';
 import '../theme.dart';
+import '../widgets/bento.dart';
 import '../widgets/coquille.dart';
 
+/// Le catalogue complet, dans la même charte que l'accueil : bandeaux
+/// larges, icônes cerclées, grands rayons.
 class PageServices extends StatelessWidget {
   const PageServices({super.key});
 
@@ -26,67 +29,18 @@ class PageServices extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(
                 Espaces.bord, 0, Espaces.bord, Espaces.md),
-            child: _CarteService(service: s),
+            child: BandeauBento(
+              icone: s.icone,
+              titre: s.libelle,
+              sousTitre: s.sousTitre,
+              teinte: s.accent == Palette.orange
+                  ? context.cl.accentTexte
+                  : context.cl.bleuTexte,
+              onTap: () => Navigator.of(context).pushNamed(s.route),
+            ),
           ),
+        const SizedBox(height: Espaces.md),
       ],
-    );
-  }
-}
-
-class _CarteService extends StatelessWidget {
-  const _CarteService({required this.service});
-
-  final Service service;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: context.cl.carte,
-      borderRadius: Rayons.brLg,
-      child: InkWell(
-        borderRadius: Rayons.brLg,
-        onTap: () => Navigator.of(context).pushNamed(service.route),
-        child: Container(
-          padding: const EdgeInsets.all(Espaces.lg),
-          decoration: BoxDecoration(
-            borderRadius: Rayons.brLg,
-            boxShadow: context.cl.ombreCarte,
-            border: Border.all(color: context.cl.ligne),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: service.accentFantome(context),
-                  borderRadius: Rayons.r(14),
-                ),
-                child: Icon(service.icone, size: 23, color: service.accent),
-              ),
-              const SizedBox(width: Espaces.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(service.libelle, style: Textes.titreService),
-                    if (service.sousTitre != null) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        service.sousTitre!,
-                        style: Textes.sousTitreService(context),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: Espaces.sm),
-              Icon(Icons.chevron_right_rounded,
-                  size: 22, color: context.cl.grise),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

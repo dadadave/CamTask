@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../state/app_state.dart';
 import '../theme.dart';
+import 'bento.dart';
 
 typedef _Onglets = ({String route, String libelle, IconData icone, IconData plein});
 
@@ -76,8 +78,11 @@ const _ongletsAgent = <_Onglets>[
   ),
 ];
 
-/// Navigation basse : barre blanche surélevée, onglet actif marqué par une
-/// pastille orange animée.
+/// Navigation basse : une pilule flottante, détachée du bord.
+///
+/// L'onglet actif s'étend en pastille pleine et montre son libellé ; les
+/// autres restent de simples icônes. On gagne en clarté — un seul mot à
+/// lire au lieu de quatre — et la barre pèse moins dans l'écran.
 class NavigationBasse extends StatelessWidget {
   const NavigationBasse({super.key, required this.routeCourante});
 
@@ -86,28 +91,30 @@ class NavigationBasse extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final etat = PorteeApp.of(context);
+    final n = context.cl;
     final onglets = etat.estAgent
         ? _ongletsAgent
         : etat.estAdmin
             ? _ongletsAdmin
             : _ongletsClient;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: context.cl.carte,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(Rayons.xl)),
-        border: Border(top: BorderSide(color: context.cl.ligne)),
-        boxShadow: context.cl.ombreForte,
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 68,
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Espaces.bord, 0, Espaces.bord, 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
+          decoration: BoxDecoration(
+            color: n.carte,
+            borderRadius: Rayons.brPilule,
+            border: Border.all(color: n.ligne),
+            boxShadow: n.ombreForte,
+          ),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               for (final o in onglets)
-                Expanded(
+                Flexible(
                   child: _Onglet(
                     libelle: o.libelle,
                     icone: o.icone,
@@ -145,41 +152,65 @@ class _Onglet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final couleur = actif ? Palette.orange : context.cl.grise;
+    final n = context.cl;
+    final couleur = actif ? n.accentTexte : n.encreDouce;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: Rayons.brMd,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
-            decoration: BoxDecoration(
-              color: actif ? context.cl.orangeFantome : Colors.transparent,
-              borderRadius: Rayons.brPilule,
-            ),
-            child: Icon(actif ? iconePleine : icone, size: 22, color: couleur),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: Rayons.brPilule,
+      // Le libellé disparaît à l'écran quand l'onglet est inactif : il doit
+      // rester annoncé, sans quoi la barre devient muette pour qui navigue
+      // au lecteur d'écran.
+      child: Semantics(
+        label: libelle,
+        selected: actif,
+        button: true,
+        child: InkWell(
+          borderRadius: Rayons.brPilule,
+          onTap: onTap,
+          child: AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            horizontal: actif ? 16 : 14,
+            vertical: 11,
           ),
-          const SizedBox(height: 3),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 220),
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: actif ? FontWeight.w700 : FontWeight.w500,
-              color: couleur,
-            ),
-            child: Text(libelle),
+          decoration: BoxDecoration(
+            color: actif ? n.orangeFantome : Colors.transparent,
+            borderRadius: Rayons.brPilule,
           ),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(actif ? iconePleine : icone, size: 21, color: couleur),
+              // Le libellé n'apparaît que sur l'onglet actif : ailleurs il
+              // n'apprend rien et encombre.
+              if (actif) ...[
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    libelle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                      color: couleur,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Barre supérieure en dégradé orange, arrondie en bas.
+/// Barre supérieure : le même fond maillé que l'accueil, titre à gauche.
 class BarreDegrade extends StatelessWidget implements PreferredSizeWidget {
   const BarreDegrade({
     super.key,
@@ -195,35 +226,64 @@ class BarreDegrade extends StatelessWidget implements PreferredSizeWidget {
   final bool retour;
 
   @override
-  Size get preferredSize => Size.fromHeight(sousTitre == null ? 64 : 82);
+  Size get preferredSize => Size.fromHeight(sousTitre == null ? 74 : 92);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: Degrades.orangeVif,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(Rayons.xl)),
-      ),
+    final n = context.cl;
+    final peutRevenir = retour && Navigator.of(context).canPop();
+
+    return ClipRRect(
+      borderRadius:
+          const BorderRadius.vertical(bottom: Radius.circular(rayonBento)),
       child: AppBar(
-        title: sousTitre == null
-            ? Text(titre)
-            : Column(
-                children: [
-                  Text(titre),
-                  const SizedBox(height: 2),
-                  Text(
-                    sousTitre!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white.withValues(alpha: 0.9),
-                    ),
-                  ),
-                ],
-              ),
+        // Le fond maillé de l'accueil, repris ici : un seul endroit à
+        // changer pour que tous les écrans se ressemblent.
+        flexibleSpace: const FondMaille(enfant: SizedBox.expand()),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleSpacing: peutRevenir ? 4 : Espaces.bord,
         toolbarHeight: preferredSize.height,
+        // Le fond est clair : l'encre et les icônes de la barre d'état
+        // doivent l'être aussi, sans quoi plus rien ne se lit.
+        foregroundColor: n.encre,
+        systemOverlayStyle:
+            n.sombre ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+        iconTheme: IconThemeData(color: n.encre, size: 22),
+        actionsIconTheme: IconThemeData(color: n.encre, size: 22),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              titre,
+              style: TextStyle(
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                height: 1.1,
+                color: n.encre,
+              ),
+            ),
+            if (sousTitre != null) ...[
+              const SizedBox(height: 3),
+              Text(
+                sousTitre!,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: n.encreDouce,
+                ),
+              ),
+            ],
+          ],
+        ),
         automaticallyImplyLeading: false,
-        leading: retour && Navigator.of(context).canPop()
+        leading: peutRevenir
             ? IconButton(
                 icon: const Icon(Icons.arrow_back_rounded),
                 onPressed: () => Navigator.of(context).maybePop(),
