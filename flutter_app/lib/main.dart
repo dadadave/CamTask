@@ -17,6 +17,8 @@ import 'pages/contentieux.dart';
 import 'pages/darp.dart';
 import 'pages/declarer.dart';
 import 'pages/dsf.dart';
+import 'pages/mes_demandes.dart';
+import 'pages/mes_factures.dart';
 import 'pages/niu_acf.dart';
 import 'pages/paiement.dart';
 import 'pages/profil.dart';
@@ -87,6 +89,13 @@ class MonComptable extends StatelessWidget {
           '/services': (_) => const PageServices(),
           '/chat': (_) => const PageChat(),
           '/profil': (_) => const PageProfil(),
+
+          // Les deux dossiers du client, ouverts depuis le profil. Ils en
+          // sortent pour que le profil ne s'allonge pas a chaque envoi.
+          '/mes-demandes': (_) =>
+              const RequiertCompte(child: PageMesDemandes()),
+          '/mes-factures': (_) =>
+              const RequiertCompte(child: PageMesFactures()),
 
           // Espace conseiller. L'accès n'est pas gardé ici : la RLS ne
           // servirait rien de plus à un client qui forcerait la route.

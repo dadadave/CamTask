@@ -465,6 +465,16 @@ class Paiement {
         StatutPaiement.confirme => 'Paiement confirmé',
         StatutPaiement.rejete => 'Paiement rejeté',
       };
+
+  /// Le même état, en tenant dans une cellule de table.
+  ///
+  /// « En attente de vérification » est juste quand on lit une déclaration
+  /// seule ; dans une colonne, il s'y tronque et ne dit plus rien.
+  String get libelleCourt => switch (statut) {
+        StatutPaiement.declare => 'En attente',
+        StatutPaiement.confirme => 'Confirmé',
+        StatutPaiement.rejete => 'Rejeté',
+      };
 }
 
 /// Où en est une facture.

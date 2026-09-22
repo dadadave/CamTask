@@ -8,6 +8,11 @@ import '../widgets/conversation.dart';
 import '../widgets/coquille.dart';
 import '../widgets/document.dart';
 
+/// La conversation du client avec l'agence.
+///
+/// Elle se tient sur le même fond et sous la même barre que le reste de
+/// l'application. Elle était jusqu'ici le seul écran bleu d'une
+/// application orange, avec son en-tête fait main.
 class PageChat extends StatefulWidget {
   const PageChat({super.key});
 
@@ -87,28 +92,25 @@ class _PageChatState extends State<PageChat> {
     _versLeBas();
 
     return Scaffold(
-      backgroundColor: context.cl.fondDoux,
+      // Le même sable que les autres écrans : le chat n'a pas de raison
+      // d'etre le seul d'une autre couleur.
+      backgroundColor: context.cl.fond,
+      appBar: const BarreConversation(
+        titre: 'Conseiller CAM-TAXE',
+        sousTitre: 'En ligne',
+        initiales: 'CT',
+        enLigne: true,
+      ),
       body: Column(
         children: [
-          _enTete(),
-          if (_erreur.isNotEmpty)
-            Container(
-              width: double.infinity,
-              color: context.cl.orangeFantome,
-              padding: const EdgeInsets.all(Espaces.md),
-              child: Text(
-                _erreur,
-                style: TextStyle(
-                    fontSize: 12.5, color: context.cl.accentTexte),
-              ),
-            ),
+          if (_erreur.isNotEmpty) BandeauErreurChat(texte: _erreur),
           Expanded(
             child: etat.messages.isEmpty
                 ? _accueil()
                 : ListView.builder(
                     controller: _defilement,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 16),
+                    padding: const EdgeInsets.fromLTRB(
+                        Espaces.bord, Espaces.lg, Espaces.bord, Espaces.sm),
                     itemCount: etat.messages.length,
                     itemBuilder: (context, i) =>
                         BulleMessage(message: etat.messages[i]),
@@ -126,95 +128,14 @@ class _PageChatState extends State<PageChat> {
     );
   }
 
-  Widget _enTete() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: Degrades.bleu,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(Rayons.xl)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left, color: Colors.white),
-                onPressed: () => Navigator.of(context).canPop()
-                    ? Navigator.of(context).pop()
-                    : Navigator.of(context).pushNamed('/accueil'),
-              ),
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: Palette.bleuFonce,
-                  shape: BoxShape.circle,
-                ),
-                child: const Text(
-                  'J',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Judicaël',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            color: Palette.succes,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'En ligne',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.more_vert, color: Colors.white),
-              const SizedBox(width: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   /// Conversation vide.
   ///
   /// L'accueil est présenté comme un écran, non comme un message : il ne
-  /// vient de personne, et le faire passer pour un mot de Judicaël serait
-  /// mentir au client sur ce qui l'attend.
+  /// vient de personne, et le faire passer pour un mot d'un conseiller
+  /// serait mentir au client sur ce qui l'attend.
   Widget _accueil() {
+    final n = context.cl;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(Espaces.xxl),
@@ -222,19 +143,24 @@ class _PageChatState extends State<PageChat> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 64,
-              height: 64,
+              width: 76,
+              height: 76,
               decoration: BoxDecoration(
-                color: context.cl.bleuFantome,
+                gradient: Degrades.orange,
                 shape: BoxShape.circle,
+                boxShadow: ombreOrange,
               ),
-              child: const Icon(Icons.forum_outlined,
-                  size: 29, color: Palette.bleuFonce),
+              child: const Icon(Icons.forum_rounded,
+                  size: 33, color: Colors.white),
             ),
-            const SizedBox(height: Espaces.lg),
+            const SizedBox(height: Espaces.xl),
             const Text(
               'Posez votre question',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+              ),
             ),
             const SizedBox(height: Espaces.sm),
             Text(
@@ -244,7 +170,7 @@ class _PageChatState extends State<PageChat> {
               style: TextStyle(
                 fontSize: 13,
                 height: 1.55,
-                color: context.cl.encreDouce,
+                color: n.encreDouce,
               ),
             ),
           ],

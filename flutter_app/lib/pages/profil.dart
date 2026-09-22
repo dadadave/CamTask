@@ -6,8 +6,13 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/communs.dart';
 import '../widgets/coquille.dart';
-import '../widgets/document.dart';
 
+/// Le profil : qui l'on est, et par où l'on entre.
+///
+/// Il ne déroule plus les demandes et les factures. Elles s'accumulent sans
+/// fin, et passé quelques envois elles noyaient les coordonnées, le réglage
+/// d'apparence et la déconnexion sous des dizaines de cartes. Chacune a
+/// désormais son écran ; le profil n'en garde que l'entrée et le compte.
 class PageProfil extends StatefulWidget {
   const PageProfil({super.key});
 
@@ -21,8 +26,8 @@ class _PageProfilState extends State<PageProfil> {
   @override
   void initState() {
     super.initState();
-    // Le statut d'un dossier est décidé par nos services, pas par le client :
-    // sans cette relecture, un passage en « Traitée » ne se verrait jamais.
+    // Les compteurs des deux entrées se lisent ici : sans cette relecture,
+    // une facture émise entre-temps n'apparaîtrait pas.
     WidgetsBinding.instance.addPostFrameCallback((_) => _rafraichir());
   }
 
@@ -35,9 +40,16 @@ class _PageProfilState extends State<PageProfil> {
       final f = await etat.mesFactures();
       if (mounted) setState(() => _factures = f);
     } on ErreurBackend {
-      // Un profil qui s'affiche sans ses factures reste utile : on ne
-      // bloque pas l'écran entier pour ça.
+      // Un profil qui s'affiche sans le compte de ses factures reste
+      // utile : on ne bloque pas l'écran entier pour ça.
     }
+  }
+
+  /// Ouvre un écran, puis relit les compteurs à son retour — le statut d'un
+  /// dossier ou d'une facture a pu changer pendant la visite.
+  Future<void> _ouvrir(String route) async {
+    await Navigator.of(context).pushNamed(route);
+    await _rafraichir();
   }
 
   @override
@@ -45,68 +57,10 @@ class _PageProfilState extends State<PageProfil> {
     final etat = PorteeApp.of(context);
     final compte = etat.compte;
 
-    if (compte == null) {
-      return Coquille(
-        titre: 'Profil',
-        routeCourante: '/profil',
-        retour: false,
-        enfants: [
-          Container(
-            margin: const EdgeInsets.all(Espaces.xl),
-            padding: const EdgeInsets.all(Espaces.xxl),
-            decoration: BoxDecoration(
-              color: context.cl.carte,
-              borderRadius: Rayons.brXl,
-              boxShadow: context.cl.ombreCarte,
-              border: Border.all(color: context.cl.ligne),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: BoxDecoration(
-                    color: context.cl.orangeFantome,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.person_outline_rounded,
-                      size: 32, color: Palette.orange),
-                ),
-                const SizedBox(height: Espaces.xl),
-                const Text(
-                  "Vous n'êtes pas connecté",
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: Espaces.sm),
-                Text(
-                  'Il faut au préalable créer un compte pour bénéficier de nos '
-                  'services et suivre vos demandes.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    height: 1.55,
-                    color: context.cl.encreDouce,
-                  ),
-                ),
-                const SizedBox(height: Espaces.xl),
-                BoutonEnvoyer(
-                  bloc: true,
-                  libelle: 'Créer un compte',
-                  icone: Icons.arrow_forward_rounded,
-                  onTap: () => Navigator.of(context).pushNamed('/auth'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
+    if (compte == null) return _deconnecte(context);
 
     final estEmploye = compte.role == Role.employe;
+    final aRegler = _factures.where((f) => f.aPayer).length;
 
     return Coquille(
       titre: 'Profil',
@@ -188,9 +142,34 @@ class _PageProfilState extends State<PageProfil> {
           ),
         ),
 
+        // ── Mes dossiers ──────────────────────────────────────────────
+        //  Deux entrées, et rien de plus : le profil garde la même hauteur
+        //  qu'on ait deux demandes ou deux cents.
+        const LibelleSection(texte: 'Mes dossiers'),
+        const SizedBox(height: Espaces.sm),
+        LigneDossier(
+          icone: Icons.folder_outlined,
+          libelle: 'Mes demandes',
+          detail: _detailDemandes(etat.demandes),
+          compteur: etat.demandes.length,
+          onTap: () => _ouvrir('/mes-demandes'),
+        ),
+        LigneDossier(
+          icone: Icons.receipt_long_outlined,
+          libelle: 'Mes factures',
+          detail: aRegler == 0
+              ? (_factures.isEmpty ? 'Aucune facture' : 'Tout est réglé')
+              : '$aRegler à régler',
+          compteur: _factures.length,
+          alerte: aRegler > 0,
+          onTap: () => _ouvrir('/mes-factures'),
+        ),
+
         // ── Coordonnées ───────────────────────────────────────────────
+        const LibelleSection(texte: 'Coordonnées'),
         Padding(
-          padding: const EdgeInsets.fromLTRB(Espaces.bord, 0, Espaces.bord, 0),
+          padding: const EdgeInsets.fromLTRB(
+              Espaces.bord, Espaces.sm, Espaces.bord, 0),
           child: Container(
             decoration: BoxDecoration(
               color: context.cl.carte,
@@ -228,207 +207,30 @@ class _PageProfilState extends State<PageProfil> {
         ),
 
         // ── Apparence ─────────────────────────────────────────────────
-        const Padding(
-          padding: EdgeInsets.fromLTRB(
-              Espaces.bord, Espaces.xxl, Espaces.bord, Espaces.md),
-          child: Text(
-            'Apparence',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.3,
-            ),
-          ),
-        ),
+        const LibelleSection(texte: 'Apparence'),
+        const SizedBox(height: Espaces.sm),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: Espaces.bord),
           child: SelecteurTheme(),
         ),
 
-        // ── Demandes ──────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-              Espaces.bord, Espaces.xxl, Espaces.bord, Espaces.md),
-          child: Row(
-            children: [
-              const Text(
-                'Mes demandes',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(width: Espaces.sm),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: context.cl.orangeFantome,
-                  borderRadius: Rayons.brPilule,
-                ),
-                child: Text(
-                  '${etat.demandes.length}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: Palette.orange,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        if (etat.demandes.isEmpty)
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: Espaces.bord),
-            padding: const EdgeInsets.all(Espaces.xxl),
-            decoration: BoxDecoration(
-              color: context.cl.carte,
-              borderRadius: Rayons.brLg,
-              boxShadow: context.cl.ombreDouce,
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.inbox_outlined, size: 34, color: context.cl.grise),
-                const SizedBox(height: Espaces.md),
-                const Text(
-                  "Aucune demande pour l'instant",
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  'Rendez-vous dans « Services » pour en créer une.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    height: 1.5,
-                    color: context.cl.encreDouce,
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          for (final d in etat.demandes) _CarteDemande(demande: d),
-
-        // ── Équipe (administrateurs seulement) ────────────────────────
-        //  On ne nomme un conseiller qu'occasionnellement : cette entrée n'a
-        //  pas sa place dans la barre du bas, où elle prendrait la place
-        //  d'un écran ouvert tous les jours.
+        // ── Administration ────────────────────────────────────────────
+        //  On ne nomme un conseiller qu'occasionnellement : ces entrées
+        //  n'ont pas leur place dans la barre du bas, où elles prendraient
+        //  celle d'un écran ouvert tous les jours.
         if (etat.estAdmin) ...[
-          const LibelleSection(texte: 'Équipe'),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                Espaces.bord, Espaces.sm, Espaces.bord, 0),
-            child: Material(
-              color: context.cl.carte,
-              borderRadius: Rayons.brLg,
-              child: InkWell(
-                borderRadius: Rayons.brLg,
-                onTap: () =>
-                    Navigator.of(context).pushNamed('/admin/equipe'),
-                child: Container(
-                  padding: const EdgeInsets.all(Espaces.lg),
-                  decoration: BoxDecoration(
-                    borderRadius: Rayons.brLg,
-                    border: Border.all(color: context.cl.ligne),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: context.cl.orangeFantome,
-                          borderRadius: Rayons.r(10),
-                        ),
-                        child: const Icon(Icons.groups_outlined,
-                            size: 19, color: Palette.orange),
-                      ),
-                      const SizedBox(width: Espaces.md),
-                      const Expanded(
-                        child: Text(
-                          'Gérer les conseillers',
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      Icon(Icons.chevron_right_rounded,
-                          color: context.cl.grise),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          const LibelleSection(texte: 'Administration'),
+          const SizedBox(height: Espaces.sm),
+          LigneDossier(
+            icone: Icons.groups_outlined,
+            libelle: 'Gérer les conseillers',
+            onTap: () => _ouvrir('/admin/equipe'),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                Espaces.bord, Espaces.sm, Espaces.bord, 0),
-            child: Material(
-              color: context.cl.carte,
-              borderRadius: Rayons.brLg,
-              child: InkWell(
-                borderRadius: Rayons.brLg,
-                onTap: () =>
-                    Navigator.of(context).pushNamed('/admin/paiements'),
-                child: Container(
-                  padding: const EdgeInsets.all(Espaces.lg),
-                  decoration: BoxDecoration(
-                    borderRadius: Rayons.brLg,
-                    border: Border.all(color: context.cl.ligne),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: context.cl.orangeFantome,
-                          borderRadius: Rayons.r(10),
-                        ),
-                        child: Icon(Icons.receipt_long_outlined,
-                            size: 19, color: context.cl.accentTexte),
-                      ),
-                      const SizedBox(width: Espaces.md),
-                      const Expanded(
-                        child: Text(
-                          'Paiements et tarifs',
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      Icon(Icons.chevron_right_rounded,
-                          color: context.cl.grise),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          LigneDossier(
+            icone: Icons.receipt_long_outlined,
+            libelle: 'Paiements et tarifs',
+            onTap: () => _ouvrir('/admin/paiements'),
           ),
-        ],
-
-        // ── Factures ──────────────────────────────────────────────────
-        if (_factures.isNotEmpty) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(
-                Espaces.bord, Espaces.xxl, Espaces.bord, Espaces.md),
-            child: Text(
-              'Mes factures',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
-          for (final f in _factures)
-            _CarteFacture(facture: f, surRetour: _rafraichir),
         ],
 
         // ── Déconnexion ───────────────────────────────────────────────
@@ -449,6 +251,75 @@ class _PageProfilState extends State<PageProfil> {
             },
             icon: const Icon(Icons.logout_rounded, size: 18),
             label: const Text('Se déconnecter'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Ce qui se lit sous « Mes demandes », sans avoir à ouvrir l'écran.
+  static String _detailDemandes(List<Demande> demandes) {
+    if (demandes.isEmpty) return 'Aucune demande envoyée';
+    final traitees = demandes.where((d) => d.statut == 'Traitée').length;
+    if (traitees == demandes.length) return 'Toutes traitées';
+    return '${demandes.length - traitees} en cours';
+  }
+
+  Widget _deconnecte(BuildContext context) {
+    return Coquille(
+      titre: 'Profil',
+      routeCourante: '/profil',
+      retour: false,
+      enfants: [
+        Container(
+          margin: const EdgeInsets.all(Espaces.xl),
+          padding: const EdgeInsets.all(Espaces.xxl),
+          decoration: BoxDecoration(
+            color: context.cl.carte,
+            borderRadius: Rayons.brXl,
+            boxShadow: context.cl.ombreCarte,
+            border: Border.all(color: context.cl.ligne),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: context.cl.orangeFantome,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.person_outline_rounded,
+                    size: 32, color: Palette.orange),
+              ),
+              const SizedBox(height: Espaces.xl),
+              const Text(
+                "Vous n'êtes pas connecté",
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: Espaces.sm),
+              Text(
+                'Il faut au préalable créer un compte pour bénéficier de nos '
+                'services et suivre vos demandes.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.55,
+                  color: context.cl.encreDouce,
+                ),
+              ),
+              const SizedBox(height: Espaces.xl),
+              BoutonEnvoyer(
+                bloc: true,
+                libelle: 'Créer un compte',
+                icone: Icons.arrow_forward_rounded,
+                onTap: () => Navigator.of(context).pushNamed('/auth'),
+              ),
+            ],
           ),
         ),
       ],
@@ -513,270 +384,6 @@ class _Ligne extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CarteDemande extends StatelessWidget {
-  const _CarteDemande({required this.demande});
-
-  final Demande demande;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(
-          Espaces.bord, 0, Espaces.bord, Espaces.md),
-      decoration: BoxDecoration(
-        color: context.cl.carte,
-        borderRadius: Rayons.brLg,
-        boxShadow: context.cl.ombreCarte,
-        border: Border.all(color: context.cl.ligne),
-      ),
-      clipBehavior: Clip.antiAlias,
-      // IntrinsicHeight : le liseré gauche doit courir sur toute la hauteur
-      // de la carte, or un Row "stretch" en hauteur libre force l'infini.
-      child: IntrinsicHeight(
-        child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(width: 4, color: _accent(demande.statut)),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(Espaces.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          demande.serviceLibelle,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            height: 1.3,
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: Espaces.sm),
-                      Text(
-                        demande.date,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: context.cl.grise,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    demande.resume,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      height: 1.5,
-                      color: context.cl.encreDouce,
-                    ),
-                  ),
-                  // Ce que le client a envoyé : il sait déjà ce que c'est,
-                  // un rappel en une ligne suffit.
-                  if (demande.piecesClient.isNotEmpty) ...[
-                    const SizedBox(height: Espaces.sm),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.attach_file_rounded,
-                            size: 13, color: context.cl.grise),
-                        const SizedBox(width: 5),
-                        Expanded(
-                          child: Text(
-                            '${demande.piecesClient.length} document(s) '
-                            'envoyé(s) : '
-                            '${demande.piecesClient.map((p) => p.fichier).join(', ')}',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              height: 1.45,
-                              color: context.cl.grise,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-
-                  // Ce que l'agence lui renvoie : c'est ce qu'il attend, et
-                  // il doit pouvoir l'ouvrir d'un appui.
-                  if (demande.piecesAgence.isNotEmpty) ...[
-                    const SizedBox(height: Espaces.md),
-                    Container(
-                      padding: const EdgeInsets.all(Espaces.md),
-                      decoration: BoxDecoration(
-                        color: context.cl.bleuFantome,
-                        borderRadius: Rayons.brSm,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.download_rounded,
-                                  size: 15, color: context.cl.bleuTexte),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  demande.piecesAgence.length == 1
-                                      ? 'Un document vous a été envoyé'
-                                      : '${demande.piecesAgence.length} documents '
-                                          'vous ont été envoyés',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: context.cl.bleuTexte,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: Espaces.sm),
-                          for (final p in demande.piecesAgence)
-                            LigneDocument(piece: p),
-                          Text(
-                            'Appuyez sur un document pour le télécharger.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: context.cl.grise,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: Espaces.md),
-                  // Le même repère visuel que dans la liste du conseiller :
-                  // les deux côtés parlent ainsi le même langage.
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: EtiquetteStatut(statut: demande.statut),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-        ),
-      ),
-    );
-  }
-
-  /// La couleur du liseré, accordée au statut du dossier.
-  static Color _accent(String statut) => switch (statut) {
-        'En cours' => Palette.bleuFonce,
-        'Traitée' => Palette.succes,
-        _ => Palette.orange,
-      };
-}
-
-/// Une facture du client : son numéro, son montant, et de quoi la régler.
-class _CarteFacture extends StatelessWidget {
-  const _CarteFacture({required this.facture, required this.surRetour});
-
-  final Facture facture;
-
-  /// Rappelé au retour du paiement : le statut a pu changer.
-  final Future<void> Function() surRetour;
-
-  @override
-  Widget build(BuildContext context) {
-    final n = context.cl;
-    final f = facture;
-    final (accent, fond) = switch (f.statut) {
-      StatutFacture.payee => (n.succesTexte, n.succesFantome),
-      StatutFacture.annulee => (n.grise, n.fondDoux),
-      StatutFacture.aPayer => (n.accentTexte, n.orangeFantome),
-    };
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(Espaces.bord, 0, Espaces.bord, 10),
-      child: Container(
-        padding: const EdgeInsets.all(Espaces.lg),
-        decoration: BoxDecoration(
-          color: n.carte,
-          borderRadius: Rayons.brLg,
-          border: Border.all(color: n.ligne),
-          boxShadow: n.ombreCarte,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        f.montantFormate,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
-                          color: n.encre,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${f.numero}  •  ${f.serviceLibelle}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 12, color: n.encreDouce),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: fond,
-                    borderRadius: Rayons.brPilule,
-                  ),
-                  child: Text(
-                    f.libelleStatut,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: accent,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (f.aPayer) ...[
-              const SizedBox(height: Espaces.md),
-              BoutonEnvoyer(
-                bloc: true,
-                libelle: 'Régler cette facture',
-                icone: Icons.account_balance_wallet_outlined,
-                onTap: () async {
-                  await Navigator.of(context).pushNamed(
-                    '/paiement',
-                    arguments: (
-                      demandeId: f.demandeId,
-                      serviceId: '',
-                      serviceLibelle: f.serviceLibelle,
-                    ),
-                  );
-                  await surRetour();
-                },
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }

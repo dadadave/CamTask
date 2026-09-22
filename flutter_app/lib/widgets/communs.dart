@@ -820,3 +820,271 @@ class EtiquetteStatut extends StatelessWidget {
     );
   }
 }
+
+/// Pastille de filtre, en tête d'une liste.
+///
+/// Partagée par la liste du conseiller et celles du client : les trois
+/// écrans filtrent la même chose de la même façon, ils doivent le montrer
+/// de la même façon.
+class PastilleFiltre extends StatelessWidget {
+  const PastilleFiltre({
+    super.key,
+    required this.libelle,
+    required this.actif,
+    required this.onTap,
+  });
+
+  final String libelle;
+  final bool actif;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: actif ? Palette.orange : context.cl.carte,
+      borderRadius: Rayons.brPilule,
+      child: InkWell(
+        borderRadius: Rayons.brPilule,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: Rayons.brPilule,
+            border: Border.all(
+              color: actif ? Palette.orange : context.cl.ligne,
+            ),
+          ),
+          child: Text(
+            libelle,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: actif ? Colors.white : context.cl.encreDouce,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Barre de pastilles de filtre, défilante à l'horizontale.
+///
+/// Elle défile parce que le nombre de filtres n'est pas garanti de tenir :
+/// « Toutes (12) • À payer (3) • Payées (8) • Annulées (1) » dépasse déjà
+/// la largeur d'un téléphone étroit.
+class BarreFiltres extends StatelessWidget {
+  const BarreFiltres({super.key, required this.pastilles});
+
+  final List<Widget> pastilles;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          Espaces.bord, Espaces.lg, Espaces.bord, Espaces.md),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final p in pastilles)
+              Padding(padding: const EdgeInsets.only(right: 8), child: p),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Une entrée qui ouvre un autre écran : icône, libellé, compteur, chevron.
+///
+/// C'est ce qui garde le profil court. Les demandes et les factures
+/// s'accumulent sans fin ; les lister toutes sur le profil finissait par
+/// noyer les coordonnées et la déconnexion sous des dizaines de cartes.
+/// Ici chaque famille tient en une ligne, et son volume se lit d'un coup
+/// d'œil au lieu de se mesurer au défilement.
+class LigneDossier extends StatelessWidget {
+  const LigneDossier({
+    super.key,
+    required this.icone,
+    required this.libelle,
+    required this.onTap,
+    this.compteur,
+    this.detail = '',
+    this.alerte = false,
+  });
+
+  final IconData icone;
+  final String libelle;
+  final VoidCallback onTap;
+
+  /// Combien d'éléments s'y trouvent. Nul, aucune pastille n'est affichée.
+  final int? compteur;
+
+  /// Une ligne d'explication sous le libellé — « 2 à régler », par exemple.
+  final String detail;
+
+  /// Teinte le compteur en orange plutôt qu'en neutre : quelque chose y
+  /// attend une action de la personne.
+  final bool alerte;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = context.cl;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          Espaces.bord, 0, Espaces.bord, Espaces.sm),
+      child: Material(
+        color: n.carte,
+        borderRadius: Rayons.brLg,
+        child: InkWell(
+          borderRadius: Rayons.brLg,
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(Espaces.lg),
+            decoration: BoxDecoration(
+              borderRadius: Rayons.brLg,
+              border: Border.all(color: n.ligne),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: n.orangeFantome,
+                    borderRadius: Rayons.r(10),
+                  ),
+                  child: Icon(icone, size: 19, color: n.accentTexte),
+                ),
+                const SizedBox(width: Espaces.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        libelle,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (detail.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          detail,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: alerte ? n.accentTexte : n.grise,
+                            fontWeight:
+                                alerte ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (compteur != null) ...[
+                  const SizedBox(width: Espaces.sm),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: alerte ? n.orangeFantome : n.fondDoux,
+                      borderRadius: Rayons.brPilule,
+                    ),
+                    child: Text(
+                      '$compteur',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: alerte ? n.accentTexte : n.encreDouce,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, color: n.grise),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Un champ de recherche au-dessus d'une liste.
+///
+/// Les filtres par statut ne suffisent plus passé quelques dizaines de
+/// lignes : on ne cherche pas « les factures payées », on cherche *cette*
+/// facture-là, par son numéro ou par le nom du client. Les pastilles
+/// répondent à la première question, ce champ à la seconde.
+class ChampRecherche extends StatelessWidget {
+  const ChampRecherche({
+    super.key,
+    required this.controleur,
+    required this.onChange,
+    this.invite = 'Rechercher…',
+  });
+
+  final TextEditingController controleur;
+  final ValueChanged<String> onChange;
+  final String invite;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = context.cl;
+    final vide = controleur.text.isEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          Espaces.bord, 0, Espaces.bord, Espaces.md),
+      child: Container(
+        decoration: BoxDecoration(
+          color: n.carte,
+          borderRadius: Rayons.brPilule,
+          border: Border.all(color: n.ligne),
+        ),
+        padding: const EdgeInsets.only(left: 14, right: 5),
+        child: Row(
+          children: [
+            Icon(Icons.search_rounded, size: 19, color: n.grise),
+            const SizedBox(width: Espaces.sm),
+            Expanded(
+              child: TextField(
+                controller: controleur,
+                onChanged: onChange,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: invite,
+                  hintStyle: TextStyle(color: n.grise, fontSize: 13.5),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                ),
+                style: const TextStyle(fontSize: 13.5),
+              ),
+            ),
+            // Le bouton n'apparaît qu'une fois qu'il y a quelque chose à
+            // effacer : sinon il occupe la place sans rien faire.
+            if (!vide)
+              IconButton(
+                tooltip: 'Effacer',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.close_rounded, size: 18, color: n.grise),
+                onPressed: () {
+                  controleur.clear();
+                  onChange('');
+                },
+              )
+            else
+              const SizedBox(width: 9),
+          ],
+        ),
+      ),
+    );
+  }
+}

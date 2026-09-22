@@ -103,7 +103,16 @@ class CarteMaille extends StatelessWidget {
   });
 
   final Widget enfant;
+
+  /// Hauteur **minimale**, et non fixe.
+  ///
+  /// Fixe, la carte tronquait son contenu sur un écran étroit : le titre
+  /// de l'accroche passe sur trois lignes sous 380 px et débordait de
+  /// 26 px, sans que rien ne le montre en dehors du mode debug. Un
+  /// plancher donne la même allure sur un écran large et laisse la carte
+  /// grandir là où il le faut.
   final double? hauteur;
+
   final VoidCallback? onTap;
 
   @override
@@ -115,7 +124,7 @@ class CarteMaille extends StatelessWidget {
         borderRadius: brBento,
         onTap: onTap,
         child: Container(
-          height: hauteur,
+          constraints: BoxConstraints(minHeight: hauteur ?? 0),
           decoration: BoxDecoration(
             borderRadius: brBento,
             boxShadow: context.cl.ombreForte,

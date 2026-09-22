@@ -120,21 +120,15 @@ class _PageAgentChatState extends State<PageAgentChat> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.cl.fondDoux,
+      backgroundColor: context.cl.fond,
+      appBar: BarreConversation(
+        titre: _clientNom.isEmpty ? 'Conversation' : _clientNom,
+        sousTitre: 'Vous répondez au nom de CAM-TAXE',
+        initiales: _clientNom.isEmpty ? 'C' : _clientNom[0].toUpperCase(),
+      ),
       body: Column(
         children: [
-          _enTete(),
-          if (_erreur.isNotEmpty)
-            Container(
-              width: double.infinity,
-              color: context.cl.orangeFantome,
-              padding: const EdgeInsets.all(Espaces.md),
-              child: Text(
-                _erreur,
-                style: TextStyle(
-                    fontSize: 12.5, color: context.cl.accentTexte),
-              ),
-            ),
+          if (_erreur.isNotEmpty) BandeauErreurChat(texte: _erreur),
           Expanded(
             child: _messages.isEmpty
                 ? Center(
@@ -152,8 +146,8 @@ class _PageAgentChatState extends State<PageAgentChat> {
                   )
                 : ListView.builder(
                     controller: _defilement,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 16),
+                    padding: const EdgeInsets.fromLTRB(
+                        Espaces.bord, Espaces.lg, Espaces.bord, Espaces.sm),
                     itemCount: _messages.length,
                     itemBuilder: (context, i) =>
                         BulleMessage(message: _messages[i]),
@@ -167,75 +161,6 @@ class _PageAgentChatState extends State<PageAgentChat> {
             onJoindre: _joindre,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _enTete() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: Degrades.bleu,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(Rayons.xl)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: Palette.bleuFonce,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  _clientNom.isEmpty ? 'C' : _clientNom[0].toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _clientNom,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Vous répondez au nom de CAM-TAXE',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -71,7 +71,9 @@ mixin EnvoiDemande<T extends StatefulWidget> on State<T> {
           ),
         );
       } else {
-        navigateur.pushNamedAndRemoveUntil('/profil', (r) => false);
+        // Vers la liste des demandes, pas vers le profil : c'est le dossier
+        // qu'on vient de deposer que le client cherche des yeux.
+        navigateur.pushNamedAndRemoveUntil('/mes-demandes', (r) => false);
       }
     } on ErreurBackend catch (e) {
       if (!mounted) return;

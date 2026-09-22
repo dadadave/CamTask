@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:excel/excel.dart';
+
 import 'package:mon_comptable/api/api.dart';
+import 'package:mon_comptable/export/tableur.dart';
 import 'package:mon_comptable/main.dart';
 import 'package:mon_comptable/models.dart';
 import 'package:mon_comptable/state/app_state.dart';
@@ -590,35 +593,381 @@ void main() {
     expect(find.text('Discuter avec un agent'), findsOneWidget);
   });
 
-  testWidgets('une demande envoyée apparaît dans le profil', (tester) async {
-    final etat = await _etatNeuf(connecte: true);
-    await etat.envoyerDemande(
-      serviceId: 'dsf',
-      serviceLibelle: 'DSF — Déclaration statistique et fiscale',
-      resume: 'NIU P123 — DSF pour la banque',
-    );
-
-    await tester.pumpWidget(MonComptable(etat: etat));
-    await tester.pumpAndSettle();
-    // Les onglets inactifs n'affichent plus leur libellé : on vise l'icône.
-    await tester.tap(find.byIcon(Icons.person_outline_rounded).last);
-    await tester.pumpAndSettle();
-
-    // La section des demandes est sous la ligne de flottaison (carte
-    // d'identité, coordonnées puis réglage d'apparence la précèdent).
-    await tester.scrollUntilVisible(
-      find.text('Mes demandes'),
-      400,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Mes demandes'), findsOneWidget);
-    expect(find.text('Envoyée'), findsOneWidget);
-  });
-
+  _testsDossiersClient();
+  _testsLargeurEcran();
+  _testsExport();
   _testsAgent();
   _testsAdmin();
   _testsPaiement();
   _testsTheme();
+}
+
+/// La colonne d'etat doit se lire sans faire defiler la table.
+///
+/// Les tables defilent a l'horizontale, et rien n'empeche d'y mettre plus
+/// de colonnes que l'ecran n'en montre. La premiere version le faisait :
+/// « En attente » et « Payee » tombaient hors champ sur un telephone, or
+/// c'est precisement ce qu'on vient y lire. Ces tests tiennent la promesse.
+void _testsLargeurEcran() {
+  /// Le plus etroit des telephones courants.
+  const largeur = 360.0;
+
+  Future<void> surTelephone(WidgetTester tester, AppState etat) async {
+    tester.view.physicalSize = const Size(largeur, 780);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+  }
+
+  /// La pastille est-elle entierement dans l'ecran, sans defilement ?
+  void estVisible(WidgetTester tester, Finder cible) {
+    final r = tester.getRect(cible);
+    expect(
+      r.right,
+      lessThanOrEqualTo(largeur),
+      reason: 'La colonne deborde de ${(r.right - largeur).round()} px : '
+          'elle exige un defilement horizontal pour se lire.',
+    );
+    expect(r.left, greaterThanOrEqualTo(0.0));
+  }
+
+  testWidgets("l etat d'une facture se lit sans defiler", (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final faux = _BackendFactice(session: _compteFactice);
+    faux.demandes.add(_dossierClient);
+    faux.emettre('dossier-1');
+    final etat = AppState(backendInjecte: faux, configure: true);
+    await etat.charger();
+
+    await surTelephone(tester, etat);
+    await tester.tap(find.byIcon(Icons.person_outline_rounded).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mes factures'));
+    await tester.pumpAndSettle();
+
+    // Dans la table, pas dans les pastilles de filtre : on vise la cellule.
+    estVisible(tester, find.text('À payer').last);
+  });
+
+  testWidgets("l etat d'un dossier se lit sans defiler, cote client",
+      (tester) async {
+    final etat = await _etatNeuf(connecte: true, dossiers: [_dossierClient]);
+    await surTelephone(tester, etat);
+    await tester.tap(find.byIcon(Icons.person_outline_rounded).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mes demandes'));
+    await tester.pumpAndSettle();
+
+    estVisible(tester, find.text('Envoyée').last);
+  });
+
+  testWidgets("le conseiller lit le client et l etat sans defiler",
+      (tester) async {
+    final etat = await _etatNeuf(agent: true, dossiers: [_dossierClient]);
+    await surTelephone(tester, etat);
+
+    // Le nom du client vient en premier : c'est par lui qu'on repere une
+    // ligne quand on voit les dossiers de tout le monde.
+    estVisible(tester, find.text('Bout TEST'));
+    estVisible(tester, find.text('Envoyée').last);
+  });
+}
+
+/// Le classeur des transactions.
+///
+/// Il se teste seul : la construction ne touche ni a Flutter ni a
+/// l'appareil, et c'est tout l'interet de l'avoir sortie de l'ecran.
+void _testsExport() {
+  Facture facture(String numero, int montant, StatutFacture statut) => Facture(
+        id: numero,
+        numero: numero,
+        montant: montant,
+        statut: statut,
+        date: '21/09/2026',
+        serviceLibelle: 'Faire un audit',
+        demandeId: 'dossier-1',
+        clientNom: 'Judicael NGUEMA',
+      );
+
+  Paiement versement(int montant, StatutPaiement statut) => Paiement(
+        id: 'p-$montant',
+        montant: montant,
+        operateur: 'orange',
+        statut: statut,
+        date: '21/09/2026',
+        numeroEnvoyeur: '699000111',
+        reference: 'MP260921.1200.A1',
+        clientNom: 'Judicael NGUEMA',
+        serviceLibelle: 'Faire un audit',
+      );
+
+  test('le classeur porte les trois feuilles attendues', () {
+    final octets = classeurTransactions(
+      factures: [facture('F-0001', 10000, StatutFacture.payee)],
+      paiements: [versement(10000, StatutPaiement.confirme)],
+    );
+    expect(octets, isNotNull);
+
+    final relu = Excel.decodeBytes(octets!);
+    expect(relu.sheets.keys, containsAll(<String>['Factures', 'Paiements']));
+    // La feuille vide du gabarit a ete retiree.
+    expect(relu.sheets.keys, isNot(contains('Sheet1')));
+  });
+
+  test('les montants partent en nombres, pas en texte', () {
+    // « 25 000 FCFA » ne s'additionne pas : c'est tout l'objet de l'export.
+    final octets = classeurTransactions(
+      factures: [facture('F-0001', 25000, StatutFacture.aPayer)],
+      paiements: const [],
+    );
+    final relu = Excel.decodeBytes(octets!);
+    final ligne = relu.tables['Factures']!.rows[1];
+    expect(ligne[4]?.value, isA<IntCellValue>());
+    expect((ligne[4]!.value! as IntCellValue).value, 25000);
+  });
+
+  test('la synthese rapproche le facture et l encaisse', () {
+    final octets = classeurTransactions(
+      factures: [
+        facture('F-0001', 10000, StatutFacture.payee),
+        facture('F-0002', 15000, StatutFacture.aPayer),
+      ],
+      paiements: [
+        versement(10000, StatutPaiement.confirme),
+        versement(15000, StatutPaiement.declare),
+      ],
+    );
+    final relu = Excel.decodeBytes(octets!);
+    final lignes = relu.tables['Synthèse']!.rows;
+
+    int valeur(String libelle) {
+      for (final l in lignes) {
+        if (l.isEmpty || l.first?.value == null) continue;
+        if (l.first!.value.toString() == libelle) {
+          return (l[2]!.value! as IntCellValue).value;
+        }
+      }
+      fail('Ligne « $libelle » absente de la synthese.');
+    }
+
+    expect(valeur('Factures émises'), 25000);
+    expect(valeur('Versements confirmés'), 10000);
+    // Un versement declare n'est pas de l'argent vu : il ne compte pas.
+    expect(valeur('Reste à encaisser'), 15000);
+  });
+
+  test('un classeur vide reste ouvrable', () {
+    final octets = classeurTransactions(factures: const [], paiements: const []);
+    expect(octets, isNotNull);
+    expect(Excel.decodeBytes(octets!).sheets, isNotEmpty);
+  });
+
+  test('le nom de fichier se classe par ordre chronologique', () {
+    final nom = nomFichierTransactions(DateTime(2026, 9, 21, 17, 4));
+    expect(nom, 'camtaxe-transactions-20260921-1704.xlsx');
+  });
+}
+
+/// Le profil annonce, il ne deroule pas.
+///
+/// Demandes et factures s'accumulent sans fin : les lister sur le profil
+/// finissait par noyer les coordonnees et la deconnexion. Chacune a son
+/// ecran, et le profil n'en garde que l'entree et le compte.
+void _testsDossiersClient() {
+  /// Un client avec un dossier envoye, et de quoi semer des factures.
+  Future<(AppState, _BackendFactice)> clientAvecDossier() async {
+    SharedPreferences.setMockInitialValues({});
+    final faux = _BackendFactice(session: _compteFactice);
+    faux.demandes.add(_dossierClient);
+    final etat = AppState(backendInjecte: faux, configure: true);
+    await etat.charger();
+    return (etat, faux);
+  }
+
+  /// Ouvre le profil depuis l'onglet du bas. Les onglets inactifs
+  /// n'affichent plus leur libelle : on vise l'icone.
+  Future<void> ouvrirProfil(WidgetTester tester, AppState etat) async {
+    await tester.pumpWidget(MonComptable(etat: etat));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.person_outline_rounded).last);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('le profil compte les demandes sans les derouler',
+      (tester) async {
+    final (etat, _) = await clientAvecDossier();
+    await ouvrirProfil(tester, etat);
+
+    // L'entree est la, avec son compte et son etat resume.
+    expect(find.text('Mes demandes'), findsOneWidget);
+    expect(find.text('1 en cours'), findsOneWidget);
+
+    // Mais pas la carte du dossier : c'est tout le propos du changement.
+    expect(find.text('Audit fiscal — NIU P123'), findsNothing);
+  });
+
+  testWidgets('l ecran des demandes deroule le dossier', (tester) async {
+    final (etat, _) = await clientAvecDossier();
+    await ouvrirProfil(tester, etat);
+
+    await tester.tap(find.text('Mes demandes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Audit fiscal — NIU P123'), findsOneWidget);
+    expect(find.text('Envoyée'), findsOneWidget);
+
+    // Le detail s'ouvre a la demande, et porte les documents.
+    await tester.tap(find.text('Audit fiscal — NIU P123'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ce que vous avez envoyé'), findsOneWidget);
+    expect(find.text('Photo de la CNI'), findsOneWidget);
+  });
+
+  testWidgets('un seul dossier ne montre pas de filtres', (tester) async {
+    final (etat, _) = await clientAvecDossier();
+    await ouvrirProfil(tester, etat);
+    await tester.tap(find.text('Mes demandes'));
+    await tester.pumpAndSettle();
+
+    // Les pastilles ne serviraient qu'a occuper la place de ce qu'on est
+    // venu lire.
+    expect(find.text('Toutes (1)'), findsNothing);
+  });
+
+  testWidgets('plusieurs dossiers filtrent par statut', (tester) async {
+    final (etat, faux) = await clientAvecDossier();
+    faux.demandes.add(_dossierClient.avec(statut: 'Traitée'));
+    await etat.rafraichirDemandes();
+
+    await ouvrirProfil(tester, etat);
+    await tester.tap(find.text('Mes demandes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Toutes (2)'), findsOneWidget);
+    expect(find.text('Audit fiscal — NIU P123'), findsNWidgets(2));
+
+    await tester.tap(find.text('Traitée (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Audit fiscal — NIU P123'), findsOneWidget);
+  });
+
+  testWidgets('le profil signale ce qui reste a regler', (tester) async {
+    final (etat, faux) = await clientAvecDossier();
+    faux.emettre('dossier-1');
+    await ouvrirProfil(tester, etat);
+
+    expect(find.text('Mes factures'), findsOneWidget);
+    expect(find.text('1 à régler'), findsOneWidget);
+    // Le montant reste sur l'ecran des factures, pas sur le profil.
+    expect(find.textContaining('FCFA'), findsNothing);
+  });
+
+  testWidgets('la table des factures tient sur une ligne', (tester) async {
+    final (etat, faux) = await clientAvecDossier();
+    faux.emettre('dossier-1');
+    await ouvrirProfil(tester, etat);
+
+    await tester.tap(find.text('Mes factures'));
+    await tester.pumpAndSettle();
+
+    // Les colonnes, puis la ligne : le numero, le montant et l'etat se
+    // lisent sans rien ouvrir.
+    expect(find.text('Numéro'), findsOneWidget);
+    expect(find.text('Montant'), findsOneWidget);
+    expect(find.text('F-2026-0001'), findsOneWidget);
+    expect(find.text('À payer'), findsWidgets);
+
+    // Le bouton n'encombre pas la table : il est dans le detail.
+    expect(find.text('Régler cette facture'), findsNothing);
+  });
+
+  testWidgets('la ligne ouvre le detail, qui propose de regler',
+      (tester) async {
+    final (etat, faux) = await clientAvecDossier();
+    faux.emettre('dossier-1');
+    await ouvrirProfil(tester, etat);
+    await tester.tap(find.text('Mes factures'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('F-2026-0001'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Régler cette facture'), findsOneWidget);
+    expect(find.text('Faire un audit'), findsWidgets);
+  });
+
+  testWidgets('la recherche retrouve une facture par son numero',
+      (tester) async {
+    final (etat, faux) = await clientAvecDossier();
+    for (var i = 0; i < 4; i++) {
+      faux.demandes.add(_dossierClient);
+      faux.emettre('dossier-1');
+    }
+    await ouvrirProfil(tester, etat);
+    await tester.tap(find.text('Mes factures'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('F-2026-0001'), findsOneWidget);
+    expect(find.text('F-2026-0003'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, '0003');
+    await tester.pumpAndSettle();
+
+    expect(find.text('F-2026-0003'), findsOneWidget);
+    expect(find.text('F-2026-0001'), findsNothing);
+  });
+
+  testWidgets('une recherche sans resultat le dit', (tester) async {
+    final (etat, faux) = await clientAvecDossier();
+    for (var i = 0; i < 4; i++) {
+      faux.demandes.add(_dossierClient);
+      faux.emettre('dossier-1');
+    }
+    await ouvrirProfil(tester, etat);
+    await tester.tap(find.text('Mes factures'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'zzzz');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aucune facture ne correspond'), findsOneWidget);
+  });
+
+  testWidgets('une facture payee ne propose plus rien', (tester) async {
+    final (etat, faux) = await clientAvecDossier();
+    final f = faux.emettre('dossier-1');
+    await faux.declarerPaiement(
+      factureId: f.id,
+      operateur: 'orange',
+      numeroEnvoyeur: '699000111',
+      reference: 'MP260921.1200.A1',
+    );
+    faux.session = _compteAdmin;
+    await faux.statuerPaiement(faux.paiements.single.id, true);
+    faux.session = _compteFactice;
+
+    await ouvrirProfil(tester, etat);
+    await tester.tap(find.text('Mes factures'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Payée'), findsWidgets);
+
+    await tester.tap(find.text('F-2026-0001'));
+    await tester.pumpAndSettle();
+    expect(find.text('Régler cette facture'), findsNothing);
+  });
+
+  testWidgets('sans facture, l ecran le dit', (tester) async {
+    final (etat, _) = await clientAvecDossier();
+    await ouvrirProfil(tester, etat);
+
+    expect(find.text('Aucune facture'), findsOneWidget);
+    await tester.tap(find.text('Mes factures'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aucune facture pour le moment'), findsOneWidget);
+  });
 }
 
 /// Un client declare, il ne valide pas. C'est toute la regle : sans elle,

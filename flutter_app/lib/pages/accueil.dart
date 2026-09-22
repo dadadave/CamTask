@@ -238,6 +238,9 @@ class _Accroche extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Rien de fixe ici : ni la hauteur de la carte, ni l'écart entre
+    // l'icône et le titre, ni la ligne des puces. Sur un écran étroit le
+    // titre prend trois lignes au lieu de deux, et la carte doit suivre.
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: Espaces.bord),
       child: CarteMaille(
@@ -246,15 +249,10 @@ class _Accroche extends StatelessWidget {
           padding: EdgeInsets.all(22),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  PastilleIcone(
-                      icone: Icons.shield_outlined, surCouleur: true),
-                  Spacer(),
-                ],
-              ),
-              Spacer(),
+              PastilleIcone(icone: Icons.shield_outlined, surCouleur: true),
+              SizedBox(height: Espaces.xl),
               Text(
                 'Faites vos déclarations chez nous',
                 style: TextStyle(
@@ -266,13 +264,17 @@ class _Accroche extends StatelessWidget {
                 ),
               ),
               SizedBox(height: Espaces.md),
-              Row(
+              // Deux puces côte à côte ne tiennent pas toujours : sur un
+              // téléphone étroit elles passent à la ligne au lieu de
+              // déborder.
+              Wrap(
+                spacing: Espaces.sm,
+                runSpacing: Espaces.sm,
                 children: [
                   PuceArgument(
                       icone: Icons.verified_rounded,
                       texte: '100 % sûr',
                       surCouleur: true),
-                  SizedBox(width: Espaces.sm),
                   PuceArgument(
                       icone: Icons.bolt_rounded,
                       texte: 'Rapide',
